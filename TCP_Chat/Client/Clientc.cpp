@@ -6,6 +6,7 @@ HINSTANCE hInst;
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 
+
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
 	hInst = hInstance;
