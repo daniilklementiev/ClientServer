@@ -170,7 +170,15 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -30;
 	}
-
+	if (err == 10049)
+	{
+		_snwprintf_s(str, MAX_LEN, L"Error #%d - wrong IP or Port", WSAGetLastError());
+		closesocket(listenSocket);
+		WSACleanup();
+		listenSocket = INVALID_SOCKET;
+		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
+		return -50;
+	}
 	err = listen(listenSocket, SOMAXCONN);
 	if (err == SOCKET_ERROR)
 	{
