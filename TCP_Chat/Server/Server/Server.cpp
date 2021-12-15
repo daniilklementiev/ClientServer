@@ -142,6 +142,15 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenSocket == INVALID_SOCKET)
 	{
+		if (WSAGetLastError() == 10049)
+		{
+			_snwprintf_s(str, MAX_LEN, L"Wrong port or IP, error %d", WSAGetLastError());
+			closesocket(listenSocket);
+			WSACleanup();
+			listenSocket = INVALID_SOCKET;
+			SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
+			return -50;
+		}
 		_snwprintf_s(str, MAX_LEN, L"Socket failed, error %d", WSAGetLastError());
 		WSACleanup();
 		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
@@ -163,6 +172,15 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	err = bind(listenSocket, (SOCKADDR*)&addr, sizeof(addr));
 	if (err == SOCKET_ERROR)
 	{
+		if (WSAGetLastError() == 10049)
+		{
+			_snwprintf_s(str, MAX_LEN, L"Wrong port or IP, error %d", WSAGetLastError());
+			closesocket(listenSocket);
+			WSACleanup();
+			listenSocket = INVALID_SOCKET;
+			SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
+			return -50;
+		}
 		_snwprintf_s(str, MAX_LEN, L"Socket bind, error %d", WSAGetLastError());
 		closesocket(listenSocket);
 		WSACleanup();
@@ -170,18 +188,18 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -30;
 	}
-	if (err == 10049)
-	{
-		_snwprintf_s(str, MAX_LEN, L"Error #%d - wrong IP or Port", WSAGetLastError());
-		closesocket(listenSocket);
-		WSACleanup();
-		listenSocket = INVALID_SOCKET;
-		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
-		return -50;
-	}
 	err = listen(listenSocket, SOMAXCONN);
 	if (err == SOCKET_ERROR)
 	{
+		if (WSAGetLastError() == 10049)
+		{
+			_snwprintf_s(str, MAX_LEN, L"Wrong port or IP, error %d", WSAGetLastError());
+			closesocket(listenSocket);
+			WSACleanup();
+			listenSocket = INVALID_SOCKET;
+			SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
+			return -50;
+		}
 		_snwprintf_s(str, MAX_LEN, L"Socket listen, error %d", WSAGetLastError());
 		closesocket(listenSocket);
 		WSACleanup();
