@@ -6,11 +6,11 @@ HINSTANCE hInst;
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode) 
+int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
 	hInst = hInstance;
 
-	const WCHAR WIN_CLASS_NAME[] = L"ServerWindow";
+	const WCHAR WIN_CLASS_NAME[] = L"ClientWindow";
 	WNDCLASS wc = {};
 
 	wc.lpfnWndProc = WinProc;
@@ -20,13 +20,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
 	ATOM mainWin = RegisterClass(&wc);
 	if (mainWin == FALSE) {
-		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP );
+		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP);
 		return -1;
 	}
 
-	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Server", 
-		WS_OVERLAPPEDWINDOW, 
-		CW_USEDEFAULT, 0, 640, 480, 
+	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Client",
+		WS_OVERLAPPEDWINDOW,
+		CW_USEDEFAULT, 0, 640, 480,
 		NULL, NULL, hInst, NULL);
 	if (hwnd == FALSE) {
 		MessageBoxW(NULL, L"Creating window error", L"Launch error client", MB_OK | MB_ICONSTOP);
