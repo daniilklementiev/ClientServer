@@ -43,7 +43,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
 	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Server", 
 		WS_OVERLAPPEDWINDOW, 
-		CW_USEDEFAULT, 0, 640, 480, 
+		940, 300, 640, 480, 
 		NULL, NULL, hInst, NULL);
 	if (hwnd == FALSE) {
 		MessageBoxW(NULL, L"Creating window error", L"Launch error client", MB_OK | MB_ICONSTOP);
@@ -68,7 +68,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int cmd = LOWORD(wParam);
 		int ntf = HIWORD(wParam);
 		switch (cmd) {
-		case CMD_START_SERVER: StartServer(&hWnd); break;
+		case CMD_START_SERVER: CreateThread(NULL, 0, StartServer, &hWnd, 0, NULL); break;
 		case CMD_STOP_SERVER: StopServer(&hWnd); break;
 		}
 		break;
@@ -128,9 +128,10 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
 	const size_t MAX_LEN = 100;
 	WCHAR str[MAX_LEN];
+
 	WSADATA wsaData;
 	int err;
-
+	// WinSock API initializing (~ wsaData = new WSA(2.2) )
 	err = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (err != 0)
 	{
@@ -139,67 +140,58 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -10;
 	}
+
+	// Socket prepairing
 	listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenSocket == INVALID_SOCKET)
 	{
-		if (WSAGetLastError() == 10049)
-		{
-			_snwprintf_s(str, MAX_LEN, L"Wrong port or IP, error %d", WSAGetLastError());
-			closesocket(listenSocket);
-			WSACleanup();
-			listenSocket = INVALID_SOCKET;
-			SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
-			return -50;
-		}
 		_snwprintf_s(str, MAX_LEN, L"Socket failed, error %d", WSAGetLastError());
 		WSACleanup();
 		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -20;
 	}
+	// Socket configuration
+	SOCKADDR_IN addr; // Config socket
+	addr.sin_family = AF_INET; // 1. Network type (family)
 
-	SOCKADDR_IN addr;
-	addr.sin_family = AF_INET;
 	char ip[20];
 	LRESULT ipLen = SendMessageA(editIP, WM_GETTEXT, 19, (LPARAM)ip);
 	ip[ipLen] = '\0';
-	inet_pton(AF_INET, ip, &addr.sin_addr);
+	inet_pton(AF_INET, ip, &addr.sin_addr); // 2. IP
 
 	char port[8];
 	LRESULT portLen = SendMessageA(editPort, WM_GETTEXT, 7, (LPARAM)port);
 	port[portLen] = '\0';
-	addr.sin_port = htons(atoi(port));
+	addr.sin_port = htons(atoi(port)); // 3. Port
+	// --- end configuration of [addr] ---
 
+	int lasetError = WSAGetLastError();
+
+	// Socket binding - config applying to socket
 	err = bind(listenSocket, (SOCKADDR*)&addr, sizeof(addr));
 	if (err == SOCKET_ERROR)
 	{
-		if (WSAGetLastError() == 10049)
-		{
-			_snwprintf_s(str, MAX_LEN, L"Wrong port or IP, error %d", WSAGetLastError());
-			closesocket(listenSocket);
-			WSACleanup();
-			listenSocket = INVALID_SOCKET;
-			SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
-			return -50;
-		}
-		_snwprintf_s(str, MAX_LEN, L"Socket bind, error %d", WSAGetLastError());
+		_snwprintf_s(str, MAX_LEN, L"Socket error #%d", WSAGetLastError());
 		closesocket(listenSocket);
 		WSACleanup();
 		listenSocket = INVALID_SOCKET;
 		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -30;
 	}
+	if (lasetError == 10049)
+	{
+		_snwprintf_s(str, MAX_LEN, L"Wrong port or IP, error %d", lasetError);
+		closesocket(listenSocket);
+		WSACleanup();
+		listenSocket = INVALID_SOCKET;
+		SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
+		return -50;
+	}
+
+	// Start of listening - from this point Socket receives data from OS
 	err = listen(listenSocket, SOMAXCONN);
 	if (err == SOCKET_ERROR)
 	{
-		if (WSAGetLastError() == 10049)
-		{
-			_snwprintf_s(str, MAX_LEN, L"Wrong port or IP, error %d", WSAGetLastError());
-			closesocket(listenSocket);
-			WSACleanup();
-			listenSocket = INVALID_SOCKET;
-			SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
-			return -50;
-		}
 		_snwprintf_s(str, MAX_LEN, L"Socket listen, error %d", WSAGetLastError());
 		closesocket(listenSocket);
 		WSACleanup();
@@ -215,10 +207,64 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	wchar_t* WPORT = new wchar_t[portSize];
 	mbstowcs(WPORT, port, portSize);
 
+	// Log start message
 	_snwprintf_s(str, MAX_LEN, L"Server start : %s:%s", WIP, WPORT);
 	SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
 	EnableWindow(btnStart, FALSE);
 	EnableWindow(btnStop, TRUE);
+	
+	// Listening loop
+	SOCKET acceptSocket; // second socket - for communication
+	
+	const size_t BUFF_LEN = 8;
+	const size_t DATA_LEN = 2048;
+	char buff[BUFF_LEN + 1]; // small buffer for transfered chunk (+ '\0')
+	char data[DATA_LEN]; // bif buffer for all transfered chunks
+	int receivedCnt; // chunk size
+
+
+	while (true) {
+		// wait for network activity
+		acceptSocket = accept(listenSocket, NULL, NULL);
+		if (acceptSocket == INVALID_SOCKET)
+		{
+			_snwprintf_s(str, MAX_LEN,
+				L"Accept socket error %d", WSAGetLastError());
+			closesocket(acceptSocket);
+			SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
+			return -70;
+		}
+		// from this point communication begins
+		data[0] = '\0';
+		do {
+			receivedCnt = recv(acceptSocket, buff, BUFF_LEN, 0);
+			if (receivedCnt == 0) { // 0 - connection closed by client
+				closesocket(acceptSocket);
+				SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)L"Connection closed");
+				break;
+			}
+			if (receivedCnt < 0) { // receiving error
+				_snwprintf_s(str, MAX_LEN, L"Communication socket error %d", WSAGetLastError());
+				closesocket(acceptSocket);
+				SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
+				break;
+			}
+			buff[receivedCnt] = '\0';
+			strcat_s(data, buff);	// data += chunk (buff)
+		} while (buff[receivedCnt - 1] != '\0'); // '\0' - end of data 
+		// data is sum of all chunks from socket
+		SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+
+		// send answer to client - write in socket
+		send(acceptSocket, "200", 4, 0);
+
+		// closing socket
+		shutdown(acceptSocket, SD_BOTH);
+		closesocket(acceptSocket);
+
+	}
+
+
 	delete[] WPORT;
 	delete[] WIP;
 	return 0;
