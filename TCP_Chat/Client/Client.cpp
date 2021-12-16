@@ -69,7 +69,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int ntf = HIWORD(wParam);
 		switch (cmd) {
 		case CMD_SEND_MESSAGE: CreateThread(NULL, 0, SendChatMessage, &hWnd, 0, NULL); break;
-		case CMD_SET_NAME: SendMessageA(editName, WM_GETTEXT, sizeof(name), (LPARAM)name); break;
+		case CMD_SET_NAME: SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name); break;
 		}
 		break;
 	}
@@ -116,7 +116,7 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	editMessage = CreateWindowExW(0, L"Edit", L"Message", WS_CHILD | WS_VISIBLE | ES_MULTILINE | WS_BORDER,
 		20, 80, 130, 50, hWnd, 0, hInst, 0);
 
-	editName = CreateWindowExW(0, L"Edit", L"Name", WS_CHILD | WS_VISIBLE | ES_MULTILINE | WS_BORDER,
+	editName = CreateWindowExW(0, L"Edit", L"Name", WS_CHILD | WS_VISIBLE | WS_BORDER,
 		20, 140, 130, 20, hWnd, 0, hInst, 0);
 
 	btnSend = CreateWindowExW(0, L"Button", L"Send", WS_CHILD | WS_VISIBLE,
@@ -185,6 +185,7 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 	const size_t MSG_LEN = 512;
 	char chatMsg[MSG_LEN];
 	int msgLen = SendMessageA(editMessage, WM_GETTEXT, MAX_LEN, (LPARAM)chatMsg);
+	int nameLen = SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
 
 	int sent = send(clientSocket, chatMsg, msgLen + 1, 0);
 	chatMsg[msgLen] = '\0';
@@ -199,12 +200,16 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 
 	// receive in the same buffer - chatMsg
 	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN, 0);
+	
+
 	if (receivedCnt > 0)
 	{
+		
 		chatMsg[receivedCnt] = '\0';
-		char* endMessage = new char[strlen(name) + strlen(chatMsg) + 2];
+		name[nameLen] = '\0';
+		char* endMessage = new char[nameLen + msgLen + 2];
 		strcat(endMessage, name);
-		strcat(endMessage, ": ");
+		strcat(endMessage, " : ");
 		strcat(endMessage, chatMsg);
 		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)endMessage);
 	}
@@ -212,7 +217,7 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 	shutdown(clientSocket, SD_BOTH);
 	closesocket(clientSocket);
 	WSACleanup();
-
 	SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-END-");
+	
 	return 0;
 }
