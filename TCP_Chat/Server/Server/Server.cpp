@@ -68,8 +68,16 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int cmd = LOWORD(wParam);
 		int ntf = HIWORD(wParam);
 		switch (cmd) {
-		case CMD_START_SERVER: CreateThread(NULL, 0, StartServer, &hWnd, 0, NULL); break;
-		case CMD_STOP_SERVER: StopServer(&hWnd); break;
+		case CMD_START_SERVER: {
+			SendMessageW(btnStart, WM_KILLFOCUS, 0, 0);
+			CreateThread(NULL, 0, StartServer, &hWnd, 0, NULL); 
+			break;
+		}
+		case CMD_STOP_SERVER: {
+			SendMessageW(btnStop, WM_KILLFOCUS, 0, 0);
+			StopServer(&hWnd); 
+			break;
+		}
 		}
 		break;
 	}
@@ -101,7 +109,7 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 		10, 10, 150, 70, hWnd, 0, hInst, NULL);
 	CreateWindowExW(0, L"Static", L"IP:", WS_CHILD | WS_VISIBLE,
 		20, 35, 40, 15, hWnd, 0, hInst, NULL);
-	editIP = CreateWindowExW(0, L"Edit", L"127.0.0.1", WS_CHILD | WS_VISIBLE,
+	editIP = CreateWindowExW(0, L"Edit", L"91.228.59.1", WS_CHILD | WS_VISIBLE,
 		45, 35, 110, 15, hWnd, 0, hInst, NULL);
 	CreateWindowExW(0, L"Static", L"Port:", WS_CHILD | WS_VISIBLE,
 		20, 50, 40, 15, hWnd, 0, hInst, NULL);
@@ -111,7 +119,7 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	grpLog = CreateWindowExW(0, L"Button", L"Server log",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		170, 10, 300, 300, hWnd, 0, hInst, NULL);
-	serverLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE, 180, 30, 280, 280, hWnd, 0, hInst, NULL);
+	serverLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE | LBS_DISABLENOSCROLL | WS_VSCROLL | WS_HSCROLL, 180, 30, 280, 280, hWnd, 0, hInst, NULL);
 
 	btnStart = CreateWindowExW(0, L"Button", L"Start server", WS_CHILD | WS_VISIBLE,
 		30, 90, 100, 25, hWnd, (HMENU)CMD_START_SERVER, hInst, NULL);
@@ -128,6 +136,9 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
 	const size_t MAX_LEN = 100;
 	WCHAR str[MAX_LEN];
+
+	SYSTEMTIME  time;
+	GetLocalTime(&time);
 
 	WSADATA wsaData;
 	int err;
@@ -236,6 +247,7 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		}
 		// from this point communication begins
 		data[0] = '\0';
+		
 		do {
 			receivedCnt = recv(acceptSocket, buff, BUFF_LEN, 0);
 			if (receivedCnt == 0) { // 0 - connection closed by client
@@ -251,12 +263,15 @@ DWORD CALLBACK StartServer(LPVOID params) {
 			}
 			buff[receivedCnt] = '\0';
 			strcat_s(data, buff);	// data += chunk (buff)
-		} while (buff[receivedCnt - 1] != '\0'); // '\0' - end of data 
+		} while (strlen(buff) == BUFF_LEN); // '\0' - end of data 
 		// data is sum of all chunks from socket
+		
+
+		_snprintf_s(data, DATA_LEN, DATA_LEN, "%s [%d:%d:%d.%d]", data, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
 		SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
 
 		// send answer to client - write in socket
-		send(acceptSocket, "200", 4, 0);
+		// send(acceptSocket, "200", 4, 0);
 
 		// closing socket
 		shutdown(acceptSocket, SD_BOTH);

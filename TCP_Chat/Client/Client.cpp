@@ -10,10 +10,11 @@
 
 #define CMD_SEND_MESSAGE		1001
 #define CMD_SET_NAME			1002
+#define CMD_RESET_NAME			1003
 
 HINSTANCE hInst;
 HWND grpEndpoint, grpLog, chatLog;
-HWND btnSend, btnName;
+HWND btnSend, btnName, btnReset;
 HWND editIP, editPort, editName, editMessage;
 
 char name[128];
@@ -68,13 +69,24 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int cmd = LOWORD(wParam);
 		int ntf = HIWORD(wParam);
 		switch (cmd) {
-		case CMD_SEND_MESSAGE: CreateThread(NULL, 0, SendChatMessage, &hWnd, 0, NULL); break;
-		case CMD_SET_NAME: 
+		case CMD_SEND_MESSAGE: {
+			SendMessageW(btnSend, WM_KILLFOCUS, 0, 0);
+			CreateThread(NULL, 0, SendChatMessage, &hWnd, 0, NULL); 
+			break;
+		}
+		case CMD_SET_NAME: {
 			int nameLen = SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
 			name[nameLen] = '\0';
 			SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name); 
 			EnableWindow(btnName, FALSE);
+			EnableWindow(editName, FALSE);
 			break;
+		}
+		case CMD_RESET_NAME: {
+			EnableWindow(btnName, TRUE);
+			EnableWindow(editName, TRUE);
+			break;
+		}
 		}
 		break;
 	}
@@ -106,7 +118,7 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 		10, 10, 150, 250, hWnd, 0, hInst, NULL);
 	CreateWindowExW(0, L"Static", L"IP:", WS_CHILD | WS_VISIBLE,
 		20, 35, 40, 15, hWnd, 0, hInst, NULL);
-	editIP = CreateWindowExW(0, L"Edit", L"127.0.0.1", WS_CHILD | WS_VISIBLE,
+	editIP = CreateWindowExW(0, L"Edit", L"91.228.59.1", WS_CHILD | WS_VISIBLE,
 		45, 35, 110, 15, hWnd, 0, hInst, NULL);
 	CreateWindowExW(0, L"Static", L"Port:", WS_CHILD | WS_VISIBLE,
 		20, 50, 40, 15, hWnd, 0, hInst, NULL);
@@ -116,7 +128,8 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	grpLog = CreateWindowExW(0, L"Button", L"Chat",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		170, 10, 300, 300, hWnd, 0, hInst, NULL);
-	chatLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE, 180, 30, 280, 280, hWnd, 0, hInst, NULL);
+	chatLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE | LBS_DISABLENOSCROLL | WS_VSCROLL | WS_HSCROLL, 
+		180, 30, 280, 280, hWnd, 0, hInst, NULL);
 
 	editMessage = CreateWindowExW(0, L"Edit", L"Message", WS_CHILD | WS_VISIBLE | ES_MULTILINE | WS_BORDER,
 		20, 80, 130, 50, hWnd, 0, hInst, 0);
@@ -125,11 +138,13 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 		20, 140, 130, 20, hWnd, 0, hInst, 0);
 
 	btnSend = CreateWindowExW(0, L"Button", L"Send", WS_CHILD | WS_VISIBLE,
-		30, 190, 100, 25, hWnd, (HMENU)CMD_SEND_MESSAGE, hInst, NULL);
+		30, 230, 100, 25, hWnd, (HMENU)CMD_SEND_MESSAGE, hInst, NULL);
 
 	btnName = CreateWindowExW(0, L"Button", L"Set Name", WS_CHILD | WS_VISIBLE,
 		30, 165, 100, 25, hWnd, (HMENU)CMD_SET_NAME, hInst, NULL);
 
+	btnReset = CreateWindowExW(0, L"Button", L"Reset Name", WS_CHILD | WS_VISIBLE,
+		30, 190, 100, 25, hWnd, (HMENU)CMD_RESET_NAME, hInst, NULL);
 	return 0;
 }
 
@@ -209,11 +224,6 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 		return -40;
 	}
 
-	SYSTEMTIME  time;
-	GetLocalTime(&time);
-	_snprintf_s(message, MSG_LEN, MSG_LEN, "%s [%d:%d:%d.%d] ", message, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
-
-
 	SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message);
 	int receveCnt = recv(clientSocket, message, MSG_LEN, 0);
 
@@ -226,6 +236,6 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 	shutdown(clientSocket, SD_BOTH);
 	closesocket(clientSocket);
 	WSACleanup();
-	SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-END-");
+	// SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-------END-------");
 	return 0;
 }
