@@ -66,3 +66,5 @@ int lastError = WSAGetLastError();
 if( lastError == 10048) {/////}
 if( lastError == 10048) {/////}
 if( lastError == 10047) {/////}
+
+Буферизация.
