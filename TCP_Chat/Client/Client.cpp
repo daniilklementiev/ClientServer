@@ -69,7 +69,12 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int ntf = HIWORD(wParam);
 		switch (cmd) {
 		case CMD_SEND_MESSAGE: CreateThread(NULL, 0, SendChatMessage, &hWnd, 0, NULL); break;
-		case CMD_SET_NAME: SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name); break;
+		case CMD_SET_NAME: 
+			int nameLen = SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
+			name[nameLen] = '\0';
+			SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name); 
+			EnableWindow(btnName, FALSE);
+			break;
 		}
 		break;
 	}
@@ -181,16 +186,22 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -30;
 	}
+	const size_t EDITMSG_LEN = 512;
 
-	const size_t MSG_LEN = 512;
-	char chatMsg[MSG_LEN];
-	int msgLen = SendMessageA(editMessage, WM_GETTEXT, MAX_LEN, (LPARAM)chatMsg);
-	int nameLen = SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
+	char editMsg[EDITMSG_LEN];
+	SendMessageA(editMessage, WM_GETTEXT, EDITMSG_LEN, (LPARAM)editMsg);
 
-	int sent = send(clientSocket, chatMsg, msgLen + 1, 0);
-	chatMsg[msgLen] = '\0';
+	char name[30];
+	SendMessageA(editName, WM_GETTEXT, 30, (LPARAM)name);
+
+	const size_t MSG_LEN = 542;
+	char message[542];
+	_snprintf_s(message, MSG_LEN, MSG_LEN, "%s: %s", name, editMsg);
+
+	int sent = send(clientSocket, message, MSG_LEN + 1, 0);
 	if (sent == SOCKET_ERROR) {
-		_snwprintf_s(str, MAX_LEN, L"Sending error %d", WSAGetLastError());
+
+		_snwprintf_s(str, MAX_LEN, L"Sending error: %d", WSAGetLastError());
 		closesocket(clientSocket);
 		WSACleanup();
 		clientSocket = INVALID_SOCKET;
@@ -198,26 +209,23 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 		return -40;
 	}
 
-	// receive in the same buffer - chatMsg
-	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN, 0);
-	
+	SYSTEMTIME  time;
+	GetLocalTime(&time);
+	_snprintf_s(message, MSG_LEN, MSG_LEN, "%s [%d:%d:%d.%d] ", message, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
 
-	if (receivedCnt > 0)
-	{
-		
-		chatMsg[receivedCnt] = '\0';
-		name[nameLen] = '\0';
-		char* endMessage = new char[nameLen + msgLen + 2];
-		strcat(endMessage, name);
-		strcat(endMessage, " : ");
-		strcat(endMessage, chatMsg);
-		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)endMessage);
+
+	SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message);
+	int receveCnt = recv(clientSocket, message, MSG_LEN, 0);
+
+	if (receveCnt > 0) {
+
+		message[receveCnt] = '\0';
+		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message);
+
 	}
-
 	shutdown(clientSocket, SD_BOTH);
 	closesocket(clientSocket);
 	WSACleanup();
 	SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-END-");
-	
 	return 0;
 }
