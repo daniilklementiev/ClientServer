@@ -7,6 +7,7 @@
 #include <Windows.h>
 #include <wchar.h>
 #include <stdio.h>
+#include "resource.h"
 
 #define CMD_SEND_MESSAGE		1001
 #define CMD_SET_NAME			1002
@@ -34,7 +35,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	wc.hInstance = hInst;
 	wc.lpszClassName = WIN_CLASS_NAME;
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-
+	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	ATOM mainWin = RegisterClass(&wc);
 	if (mainWin == FALSE) {
 		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP);
@@ -77,7 +78,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	case WM_PAINT: {
 		PAINTSTRUCT ps;
 		HDC dc = BeginPaint(hWnd, &ps);
-		FillRect(dc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+		//FillRect(dc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
 		EndPaint(hWnd, &ps);
 		break;
 	}
@@ -86,7 +87,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		HWND ctl = (HWND)lParam;
 		if (ctl != grpEndpoint && ctl != grpLog) {
 			SetBkMode(dc, TRANSPARENT);
-			SetTextColor(dc, RGB(20, 20, 200));
+			SetTextColor(dc, RGB(255, 0, 0));
 		}
 		return (LRESULT)GetStockObject(NULL_BRUSH);
 	}

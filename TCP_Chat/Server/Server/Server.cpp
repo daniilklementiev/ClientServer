@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <wchar.h>
 #include <stdio.h>
+#include "resource.h"
 
 #define CMD_START_SERVER	1001
 #define CMD_STOP_SERVER		1002
@@ -34,6 +35,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	wc.hInstance = hInst;
 	wc.lpszClassName = WIN_CLASS_NAME;
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 
 	ATOM mainWin = RegisterClass(&wc);
 	if (mainWin == FALSE) {
