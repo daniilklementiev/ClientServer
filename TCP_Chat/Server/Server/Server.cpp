@@ -8,6 +8,65 @@
 #include <stdio.h>
 #include "resource.h"
 
+class ChatMessage {
+	char* nik;
+	char* txt;
+public:
+	char* getNik() { return nik; }
+	char* getTxt() { return txt; }
+	void setNik(char* nik) {
+		if (nik == NULL) return;
+		if (this->nik != NULL) delete[] this->nik;
+		this->nik = new char[strlen(nik) + 1];
+		strcpy(this->nik, nik);
+	}
+	void setTxt(char* txt) {
+		if (txt == NULL) return;
+		if (this->txt != NULL) delete[] this->txt;
+		this->txt = new char[strlen(txt) + 1];
+		strcpy(this->txt, txt);
+	}
+
+	ChatMessage() : nik{ NULL }, txt{ NULL } {}
+	ChatMessage(char* nik, char* txt) : ChatMessage() {
+		setNik(nik);
+		setTxt(txt);
+	}
+
+	bool parseString(char* str) {
+		if (str == NULL) return false;
+		// looking for TAB symbol
+		int tabPosition = -1;
+		int len = strlen(str);
+		int i = 0;
+		while (str[i] != '\t' && i < len) ++i; 
+		if (i == len) return false;
+		tabPosition = i;
+
+		// from 0 to TAB - text
+		if (this->txt != NULL) delete[] this->txt;
+		this->txt = new char[tabPosition + 1];
+		for (i = 0; i < tabPosition; ++i) 
+			this->txt[i] = str[i];
+		this->txt[tabPosition] = '\0';
+
+		// from TAB to LEN - nik
+		if (this->nik != NULL) delete[] this->nik;
+		this->nik = new char[len - tabPosition];
+		for (i = tabPosition+1; i < len; ++i) 
+			this->nik[i - tabPosition - 1] = str[i];
+		this->nik[len - tabPosition - 1] = '\0';
+
+		return true;
+	}
+
+	/*char* toString() {
+		char* str = new char[strlen(nik) + strlen(txt) + 1];
+		_snprintf_s(str, (strlen(nik) + strlen(txt) + 1), (strlen(nik) + strlen(txt) + 1), "%s : %s", getNik(), getTxt());
+		return str;
+	}*/
+};
+
 #define CMD_START_SERVER	1001
 #define CMD_STOP_SERVER		1002
 
@@ -24,7 +83,7 @@ DWORD	CALLBACK CreateUI(LPVOID);		// User Interface
 DWORD	CALLBACK StartServer(LPVOID);
 DWORD	CALLBACK StopServer(LPVOID);
 
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode) 
+int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
 	hInst = hInstance;
 
@@ -39,13 +98,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
 	ATOM mainWin = RegisterClass(&wc);
 	if (mainWin == FALSE) {
-		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP );
+		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP);
 		return -1;
 	}
 
-	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Server", 
-		WS_OVERLAPPEDWINDOW, 
-		940, 300, 640, 480, 
+	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Server",
+		WS_OVERLAPPEDWINDOW,
+		940, 300, 640, 480,
 		NULL, NULL, hInst, NULL);
 	if (hwnd == FALSE) {
 		MessageBoxW(NULL, L"Creating window error", L"Launch error client", MB_OK | MB_ICONSTOP);
@@ -70,8 +129,16 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int cmd = LOWORD(wParam);
 		int ntf = HIWORD(wParam);
 		switch (cmd) {
-		case CMD_START_SERVER: CreateThread(NULL, 0, StartServer, &hWnd, 0, NULL); break;
-		case CMD_STOP_SERVER: StopServer(&hWnd); break;
+		case CMD_START_SERVER: {
+			SendMessageW(btnStart, WM_KILLFOCUS, 0, 0);
+			CreateThread(NULL, 0, StartServer, &hWnd, 0, NULL);
+			break;
+		}
+		case CMD_STOP_SERVER: {
+			SendMessageW(btnStop, WM_KILLFOCUS, 0, 0);
+			StopServer(&hWnd);
+			break;
+		}
 		}
 		break;
 	}
@@ -113,7 +180,8 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	grpLog = CreateWindowExW(0, L"Button", L"Server log",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		170, 10, 300, 300, hWnd, 0, hInst, NULL);
-	serverLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE, 180, 30, 280, 280, hWnd, 0, hInst, NULL);
+	serverLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE | LBS_DISABLENOSCROLL | WS_VSCROLL | WS_HSCROLL,
+		180, 30, 280, 280, hWnd, 0, hInst, NULL);
 
 	btnStart = CreateWindowExW(0, L"Button", L"Start server", WS_CHILD | WS_VISIBLE,
 		30, 90, 100, 25, hWnd, (HMENU)CMD_START_SERVER, hInst, NULL);
@@ -130,6 +198,9 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
 	const size_t MAX_LEN = 100;
 	WCHAR str[MAX_LEN];
+
+	SYSTEMTIME  time;
+	GetLocalTime(&time);
 
 	WSADATA wsaData;
 	int err;
@@ -214,10 +285,10 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	SendMessageW(serverLog, LB_ADDSTRING, 0, (LPARAM)str);
 	EnableWindow(btnStart, FALSE);
 	EnableWindow(btnStop, TRUE);
-	
+
 	// Listening loop
 	SOCKET acceptSocket; // second socket - for communication
-	
+
 	const size_t BUFF_LEN = 8;
 	const size_t DATA_LEN = 2048;
 	char buff[BUFF_LEN + 1]; // small buffer for transfered chunk (+ '\0')
@@ -238,6 +309,7 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		}
 		// from this point communication begins
 		data[0] = '\0';
+
 		do {
 			receivedCnt = recv(acceptSocket, buff, BUFF_LEN, 0);
 			if (receivedCnt == 0) { // 0 - connection closed by client
@@ -253,17 +325,26 @@ DWORD CALLBACK StartServer(LPVOID params) {
 			}
 			buff[receivedCnt] = '\0';
 			strcat_s(data, buff);	// data += chunk (buff)
-		} while (buff[receivedCnt - 1] != '\0'); // '\0' - end of data 
+		} while (strlen(buff) == BUFF_LEN); // '\0' - end of data 
 		// data is sum of all chunks from socket
-		SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+		// extract message from data
+		ChatMessage* message = new ChatMessage();
+		message->parseString(data);
 
+		SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)message->getTxt());
+
+		//_snprintf_s(newMsg, DATA_LEN, DATA_LEN, "%s : %s", username, text);
+		//SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)newMsg);
+
+		//_snprintf_s(data, DATA_LEN, DATA_LEN, "%s [%d:%d:%d.%d]", data, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+		
+		SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 		// send answer to client - write in socket
-		send(acceptSocket, "200", 4, 0);
+		// send(acceptSocket, "200", 4, 0);
 
 		// closing socket
 		shutdown(acceptSocket, SD_BOTH);
 		closesocket(acceptSocket);
-
 	}
 
 

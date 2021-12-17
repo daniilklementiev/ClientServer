@@ -11,10 +11,11 @@
 
 #define CMD_SEND_MESSAGE		1001
 #define CMD_SET_NAME			1002
+#define CMD_RESET_NAME			1003
 
 HINSTANCE hInst;
 HWND grpEndpoint, grpLog, chatLog;
-HWND btnSend, btnName;
+HWND btnSend, btnName, btnReset;
 HWND editIP, editPort, editName, editMessage;
 
 char name[128];
@@ -69,8 +70,24 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int cmd = LOWORD(wParam);
 		int ntf = HIWORD(wParam);
 		switch (cmd) {
-		case CMD_SEND_MESSAGE: CreateThread(NULL, 0, SendChatMessage, &hWnd, 0, NULL); break;
-		case CMD_SET_NAME: SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name); break;
+		case CMD_SEND_MESSAGE: {
+			SendMessageW(btnSend, WM_KILLFOCUS, 0, 0);
+			CreateThread(NULL, 0, SendChatMessage, &hWnd, 0, NULL);
+			break;
+		}
+		case CMD_SET_NAME: {
+			int nameLen = SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
+			name[nameLen] = '\0';
+			SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
+			EnableWindow(btnName, FALSE);
+			EnableWindow(editName, FALSE);
+			break;
+		}
+		case CMD_RESET_NAME: {
+			EnableWindow(btnName, TRUE);
+			EnableWindow(editName, TRUE);
+			break;
+		}
 		}
 		break;
 	}
@@ -112,7 +129,8 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	grpLog = CreateWindowExW(0, L"Button", L"Chat",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		170, 10, 300, 300, hWnd, 0, hInst, NULL);
-	chatLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE, 180, 30, 280, 280, hWnd, 0, hInst, NULL);
+	chatLog = CreateWindowExW(0, L"Listbox", L"", WS_CHILD | WS_VISIBLE | LBS_DISABLENOSCROLL | WS_VSCROLL | WS_HSCROLL,
+		180, 30, 280, 280, hWnd, 0, hInst, NULL);
 
 	editMessage = CreateWindowExW(0, L"Edit", L"Message", WS_CHILD | WS_VISIBLE | ES_MULTILINE | WS_BORDER,
 		20, 80, 130, 50, hWnd, 0, hInst, 0);
@@ -121,11 +139,13 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 		20, 140, 130, 20, hWnd, 0, hInst, 0);
 
 	btnSend = CreateWindowExW(0, L"Button", L"Send", WS_CHILD | WS_VISIBLE,
-		30, 190, 100, 25, hWnd, (HMENU)CMD_SEND_MESSAGE, hInst, NULL);
+		30, 230, 100, 25, hWnd, (HMENU)CMD_SEND_MESSAGE, hInst, NULL);
 
 	btnName = CreateWindowExW(0, L"Button", L"Set Name", WS_CHILD | WS_VISIBLE,
 		30, 165, 100, 25, hWnd, (HMENU)CMD_SET_NAME, hInst, NULL);
 
+	btnReset = CreateWindowExW(0, L"Button", L"Reset Name", WS_CHILD | WS_VISIBLE,
+		30, 190, 100, 25, hWnd, (HMENU)CMD_RESET_NAME, hInst, NULL);
 	return 0;
 }
 
@@ -135,7 +155,7 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 	SOCKET clientSocket;
 	const size_t MAX_LEN = 100;
 	WCHAR str[MAX_LEN];
-
+	
 	WSADATA wsaData;
 	int err;
 	// WinSock API initializing (~ wsaData = new WSA(2.2) )
@@ -182,16 +202,34 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -30;
 	}
+	const size_t EDITMSG_LEN = 512;
 
-	const size_t MSG_LEN = 512;
+	char editMsg[EDITMSG_LEN];
+	int msg_len = SendMessageA(editMessage, WM_GETTEXT, EDITMSG_LEN, (LPARAM)editMsg);
+
+	char name[30];
+	SendMessageA(editName, WM_GETTEXT, 30, (LPARAM)name);
+	name[strlen(name) + 1] = '\t';
+
+	const size_t MSG_LEN = 542;
+	const size_t NIK_LEN = 16;
+
 	char chatMsg[MSG_LEN];
-	int msgLen = SendMessageA(editMessage, WM_GETTEXT, MAX_LEN, (LPARAM)chatMsg);
-	int nameLen = SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
-
-	int sent = send(clientSocket, chatMsg, msgLen + 1, 0);
+	char chatNik[NIK_LEN];
+	int nikLen = SendMessageA(editName, WM_GETTEXT, NIK_LEN - 1, (LPARAM)chatNik);
+	chatNik[nikLen] = '\0';
+	int msgLen = SendMessageA(editMessage, WM_GETTEXT, MSG_LEN - NIK_LEN - 1, (LPARAM)chatMsg);
 	chatMsg[msgLen] = '\0';
+
+	strcat(chatMsg, "\t");
+	strcat(chatMsg, chatNik);
+
+
+
+	int sent = send(clientSocket, chatMsg, msgLen + nikLen + 2, 0);
 	if (sent == SOCKET_ERROR) {
-		_snwprintf_s(str, MAX_LEN, L"Sending error %d", WSAGetLastError());
+
+		_snwprintf_s(str, MAX_LEN, L"Sending error: %d", WSAGetLastError());
 		closesocket(clientSocket);
 		WSACleanup();
 		clientSocket = INVALID_SOCKET;
@@ -199,26 +237,20 @@ DWORD	CALLBACK SendChatMessage(LPVOID params) {
 		return -40;
 	}
 
-	// receive in the same buffer - chatMsg
-	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN, 0);
+	SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)chatMsg);
 	
+	int receveCnt = recv(clientSocket, chatMsg, msgLen + 1, 0);
 
-	if (receivedCnt > 0)
-	{
-		
-		chatMsg[receivedCnt] = '\0';
-		name[nameLen] = '\0';
-		char* endMessage = new char[nameLen + msgLen + 2];
-		strcat(endMessage, name);
-		strcat(endMessage, " : ");
-		strcat(endMessage, chatMsg);
-		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)endMessage);
+	if (receveCnt > 0) {
+
+		chatMsg[receveCnt] = '\0';
+		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)chatMsg);
+
 	}
 
 	shutdown(clientSocket, SD_BOTH);
 	closesocket(clientSocket);
 	WSACleanup();
-	SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-END-");
-	
+	// SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-------END-------");
 	return 0;
 }
