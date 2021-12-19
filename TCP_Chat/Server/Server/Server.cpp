@@ -7,68 +7,13 @@
 #include <wchar.h>
 #include <stdio.h>
 #include "resource.h"
-
-class ChatMessage {
-	char* nik;
-	char* txt;
-public:
-	char* getNik() { return nik; }
-	char* getTxt() { return txt; }
-	void setNik(char* nik) {
-		if (nik == NULL) return;
-		if (this->nik != NULL) delete[] this->nik;
-		this->nik = new char[strlen(nik) + 1];
-		strcpy(this->nik, nik);
-	}
-	void setTxt(char* txt) {
-		if (txt == NULL) return;
-		if (this->txt != NULL) delete[] this->txt;
-		this->txt = new char[strlen(txt) + 1];
-		strcpy(this->txt, txt);
-	}
-
-	ChatMessage() : nik{ NULL }, txt{ NULL } {}
-	ChatMessage(char* nik, char* txt) : ChatMessage() {
-		setNik(nik);
-		setTxt(txt);
-	}
-
-	bool parseString(char* str) {
-		if (str == NULL) return false;
-		// looking for TAB symbol
-		int tabPosition = -1;
-		int len = strlen(str);
-		int i = 0;
-		while (str[i] != '\t' && i < len) ++i; 
-		if (i == len) return false;
-		tabPosition = i;
-
-		// from 0 to TAB - text
-		if (this->txt != NULL) delete[] this->txt;
-		this->txt = new char[tabPosition + 1];
-		for (i = 0; i < tabPosition; ++i) 
-			this->txt[i] = str[i];
-		this->txt[tabPosition] = '\0';
-
-		// from TAB to LEN - nik
-		if (this->nik != NULL) delete[] this->nik;
-		this->nik = new char[len - tabPosition];
-		for (i = tabPosition+1; i < len; ++i) 
-			this->nik[i - tabPosition - 1] = str[i];
-		this->nik[len - tabPosition - 1] = '\0';
-
-		return true;
-	}
-
-	/*char* toString() {
-		char* str = new char[strlen(nik) + strlen(txt) + 1];
-		_snprintf_s(str, (strlen(nik) + strlen(txt) + 1), (strlen(nik) + strlen(txt) + 1), "%s : %s", getNik(), getTxt());
-		return str;
-	}*/
-};
+#include <string>
+#include <time.h>
+#include <list>
 
 #define CMD_START_SERVER	1001
 #define CMD_STOP_SERVER		1002
+
 
 
 HINSTANCE hInst;
@@ -82,6 +27,99 @@ LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID);		// User Interface
 DWORD	CALLBACK StartServer(LPVOID);
 DWORD	CALLBACK StopServer(LPVOID);
+std::string* splitString(std::string str, char sym) {
+
+	if (str.size() == 0) {
+
+		return NULL;
+	}
+
+	size_t pos = 0;
+	int parts = 1;
+
+	while ((pos = str.find(sym, pos + 1)) != std::string::npos) {
+		parts++;
+	}
+
+	std::string* res = new std::string[parts];
+	pos = 0;
+	size_t pos2;
+
+	for (int i = 0; i < parts - 1; i++) {
+
+		pos2 = str.find(sym, pos + 1);
+		res[i] = str.substr(pos, pos2 - pos);
+		pos = pos2;
+
+	}
+
+	res[parts - 1] = str.substr(pos + 1);
+
+	if (parts == 1) {
+
+
+	}
+
+	return res;
+}
+
+class ChatMessage {
+
+private:
+	char* nick;
+	char* txt;
+	SYSTEMTIME  time;
+
+public:
+	ChatMessage() :nick{ NULL }, txt{ NULL }{
+		GetLocalTime(&time);
+	}
+	ChatMessage(char* nick, char* txt) :ChatMessage() {
+		setNick(nick);
+		setTxt(txt);
+	}
+
+	char* getNick() {
+		return nick;
+	}
+	char* getTxt() {
+		return txt;
+	}
+	SYSTEMTIME getSysTime() {
+		return time;
+	}
+
+	void setNick(const char* nick) {
+		if (!nick) {
+			return;
+		}
+		if (this->nick) {
+			delete this->nick;
+		}
+		this->nick = new char[strlen(nick)];
+		strcpy(this->nick, nick);
+	}
+	void setTxt(const char* txt) {
+		if (!txt) {
+			return;
+		}
+		if (this->txt) {
+			delete this->txt;
+		}
+		this->txt = new char[strlen(txt)];
+		strcpy(this->txt, txt);
+	}
+
+	bool parseString(char* str) {
+		std::string* userData = splitString(str, '\t');
+		setNick(userData[0].c_str());
+		setTxt(userData[1].c_str());
+
+		return userData;
+	}
+};
+
+std::list <ChatMessage>mes_buf;
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
@@ -326,19 +364,24 @@ DWORD CALLBACK StartServer(LPVOID params) {
 			buff[receivedCnt] = '\0';
 			strcat_s(data, buff);	// data += chunk (buff)
 		} while (strlen(buff) == BUFF_LEN); // '\0' - end of data 
+
 		// data is sum of all chunks from socket
 		// extract message from data
-		ChatMessage* message = new ChatMessage();
-		message->parseString(data);
+		ChatMessage message;
+		message.parseString(data);
+		mes_buf.push_back(message);
 
-		SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)message->getTxt());
+		const size_t MAX_LOGDATA = 543;
+		char logData[MAX_LOGDATA];
 
-		//_snprintf_s(newMsg, DATA_LEN, DATA_LEN, "%s : %s", username, text);
-		//SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)newMsg);
+		SYSTEMTIME time;
+		time = message.getSysTime();
 
-		//_snprintf_s(data, DATA_LEN, DATA_LEN, "%s [%d:%d:%d.%d]", data, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
-		
+		//send message to log
+		_snprintf_s(logData, MAX_LOGDATA, MAX_LOGDATA, "%s %s [%dh %dm %ds]\0", message.getNick(), message.getTxt(), time.wHour, time.wMinute, time.wSecond);
+		SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)logData);
 		SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
+
 		// send answer to client - write in socket
 		// send(acceptSocket, "200", 4, 0);
 
