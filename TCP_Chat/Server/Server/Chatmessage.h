@@ -189,6 +189,11 @@ public:
 		{
 			sprintf(_str, "[Yesterday] %s -> %s", this->nick, this->txt);
 		}
+		else if (t->tm_year == now->tm_year && t->tm_mon == now->tm_mon) {
+
+			sprintf(_str, "%d days ago at %.2d:%.2d %s:%s", now->tm_mday - t->tm_mday, t->tm_hour, t->tm_min, getNick(), getTxt());
+
+		}
 		else {
 			sprintf(_str, "[%d.%d.%d] %s -> %s", 1 + t->tm_mday, 1 + t->tm_mon, 1900 + t->tm_year, this->nick, this->txt);
 		}
