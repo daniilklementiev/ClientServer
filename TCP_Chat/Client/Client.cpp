@@ -8,6 +8,7 @@
 #include <wchar.h>
 #include <stdio.h>
 #include "resource.h"
+#include "../Server/Server/Chatmessage.h"
 
 #define CMD_SEND_MESSAGE		1001
 #define CMD_SET_NAME			1002
@@ -36,7 +37,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	wc.hInstance = hInst;
 	wc.lpszClassName = WIN_CLASS_NAME;
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
+	//wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	ATOM mainWin = RegisterClass(&wc);
 	if (mainWin == FALSE) {
 		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP);
@@ -150,111 +151,83 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 }
 
 DWORD CALLBACK SendChatMessage(LPVOID params) {
-
 	HWND hWnd = *((HWND*)params);
 
+	SOCKET clientSocket;
 	const size_t MAX_LEN = 100;
 	WCHAR str[MAX_LEN];
-	SOCKET clientSocket;
 
 	WSADATA wsaData;
 	int err;
 
-	//WinSock API initializing ( ~wsaData = new WSA(2.2) )
+	// WinSock API initializing (~ wsaData = new WSA(2.2) )
 	err = WSAStartup(MAKEWORD(2, 2), &wsaData);
-
-	if (err) {
-
-		_snwprintf_s(str, MAX_LEN, L"Startup error: %d", err);
+	if (err != 0) {
+		_snwprintf_s(str, MAX_LEN,
+			L"Startup failed, error %d", err);
 		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -10;
 	}
 
+	// Socket preparing
 	clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-	//Socket preparing
 	if (clientSocket == INVALID_SOCKET) {
-
-		_snwprintf_s(str, MAX_LEN, L"Socket error: %d", WSAGetLastError());
+		_snwprintf_s(str, MAX_LEN,
+			L"Socket failed, error %d", WSAGetLastError());
 		WSACleanup();
 		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -20;
-
 	}
-	//----Socket configuration------
-	SOCKADDR_IN addr; //Config structure
 
-	addr.sin_family = AF_INET; // 1.Network type (family)
+	// -- Socket configuration --
+	SOCKADDR_IN addr;   // Config structure
+
+	addr.sin_family = AF_INET;  // 1. Network type (family)
 
 	char ip[20];
-	LRESULT ipLen = SendMessageA(editIP, WM_GETTEXT, 29, (LPARAM)ip);
+	LRESULT ipLen = SendMessageA(editIP, WM_GETTEXT, 19, (LPARAM)ip);
 	ip[ipLen] = '\0';
-
-	inet_pton(AF_INET, ip, &addr.sin_addr); //2.IP
-
+	inet_pton(AF_INET, ip, &addr.sin_addr);  // 2. IP
 
 	char port[8];
 	LRESULT portLen = SendMessageA(editPort, WM_GETTEXT, 7, (LPARAM)port);
 	port[portLen] = '\0';
+	addr.sin_port = htons(atoi(port));  // 3. Port
+	// -- end configuration of [addr] --
 
-	addr.sin_port = htons(atoi(port)); //3.Port
-	//----end configuration------
-
-	//Connect to server
+	// Connect to endpoint
 	err = connect(clientSocket, (SOCKADDR*)&addr, sizeof(addr));
-
 	if (err == SOCKET_ERROR) {
-
-		int lastError = WSAGetLastError();
-
-		if (lastError == 10048) {
-
-			_snwprintf_s(str, MAX_LEN, L"Socket connect error: %d %s", lastError, L"Address already in use");
-		}
-		else if (lastError == 10049) {
-
-			_snwprintf_s(str, MAX_LEN, L"Socket connect error: %d %s", lastError, L"Cannot assign requested address");
-		}
-		else if (lastError == 10050) {
-
-			_snwprintf_s(str, MAX_LEN, L"Socket connect error: %d %s", lastError, L"Network is down");
-		}
-		else if (lastError == 10051) {
-
-			_snwprintf_s(str, MAX_LEN, L"Socket connect error: %d %s", lastError, L"Network is unreachable");
-		}
-		else {
-
-			_snwprintf_s(str, MAX_LEN, L"Socket connect error: %d", lastError);
-		}
-
+		_snwprintf_s(str, MAX_LEN,
+			L"Socket connect error %d", WSAGetLastError());
 		closesocket(clientSocket);
 		WSACleanup();
+		clientSocket = INVALID_SOCKET;
 		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
 		return -30;
-
 	}
 
-	const size_t EDITMSG_LEN = 512;
+	const size_t MSG_LEN = 512;
+	const size_t NIK_LEN = 16;
 
-	char editMsg[EDITMSG_LEN];
-	SendMessageA(editMessage, WM_GETTEXT, EDITMSG_LEN, (LPARAM)editMsg);
+	char chatMsg[MSG_LEN];
+	char chatNik[NIK_LEN];
 
-	char name[30];
-	SendMessageA(editName, WM_GETTEXT, 30, (LPARAM)name);
+	int nikLen = SendMessageA(editName, WM_GETTEXT,
+		NIK_LEN - 1, (LPARAM)chatNik);
+	chatNik[nikLen] = '\0';
 
-	const size_t MSG_LEN = 542;
-	char message[542];
+	int msgLen = SendMessageA(editMessage, WM_GETTEXT,
+		MSG_LEN - NIK_LEN - 1, (LPARAM)chatMsg);
+	chatMsg[msgLen] = '\0';
 
-	_snprintf_s(message, MSG_LEN, MSG_LEN, "%s: \t%s\0", name, editMsg);
+	strcat(chatMsg, "\t");
+	strcat(chatMsg, chatNik);
 
-	int sent = send(clientSocket, message, MSG_LEN + 1, 0);
-
-
-
+	int sent = send(clientSocket, chatMsg, msgLen + nikLen + 2, 0);
 	if (sent == SOCKET_ERROR) {
-
-		_snwprintf_s(str, MAX_LEN, L"Sending error: %d ", WSAGetLastError());
+		_snwprintf_s(str, MAX_LEN,
+			L"Sending error %d", WSAGetLastError());
 		closesocket(clientSocket);
 		WSACleanup();
 		clientSocket = INVALID_SOCKET;
@@ -262,23 +235,24 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 		return -40;
 	}
 
-	SYSTEMTIME  time;
-	GetLocalTime(&time);
-
-	_snprintf_s(message, MSG_LEN, MSG_LEN, "%s   [%dh %dm %ds]", message, time.wHour, time.wMinute, time.wSecond);
-
-	SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message);
-	int receveCnt = recv(clientSocket, message, MSG_LEN, 0);
-
-	if (receveCnt > 0) {
-		message[receveCnt] = '\0';
-		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message);
-
+	// receive in the same buffer - chatMsg
+	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN - 1, 0);
+	if (receivedCnt > 0) {
+		chatMsg[receivedCnt] = '\0';
+		ChatMessage *message = new ChatMessage();
+		message->parseStringDT(chatMsg);
+		if(message->parseStringDT(chatMsg))
+			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message->toClientString());
+		else
+			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Error");
+		
 	}
+	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 
 	shutdown(clientSocket, SD_BOTH);
 	closesocket(clientSocket);
 	WSACleanup();
-	//SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-End-");
+
+	// SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-End-");
 	return 0;
 }

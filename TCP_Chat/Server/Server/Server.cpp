@@ -3,121 +3,24 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <WinSock2.h>
 #include <WS2tcpip.h>
-#include <Windows.h>
-#include <wchar.h>
-#include <stdio.h>
 #include "resource.h"
-#include <string>
-#include <time.h>
 #include <list>
+#include "Chatmessage.h"
 
 #define CMD_START_SERVER	1001
 #define CMD_STOP_SERVER		1002
-
-
 
 HINSTANCE hInst;
 HWND grpEndpoint, grpLog, serverLog;
 HWND btnStart, btnStop;
 HWND editIP, editPort;
-SOCKET listenSocket;
-
+SOCKET listenSocket;		
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID);		// User Interface
 DWORD	CALLBACK StartServer(LPVOID);
 DWORD	CALLBACK StopServer(LPVOID);
-std::string* splitString(std::string str, char sym) {
 
-	if (str.size() == 0) {
-
-		return NULL;
-	}
-
-	size_t pos = 0;
-	int parts = 1;
-
-	while ((pos = str.find(sym, pos + 1)) != std::string::npos) {
-		parts++;
-	}
-
-	std::string* res = new std::string[parts];
-	pos = 0;
-	size_t pos2;
-
-	for (int i = 0; i < parts - 1; i++) {
-
-		pos2 = str.find(sym, pos + 1);
-		res[i] = str.substr(pos, pos2 - pos);
-		pos = pos2;
-
-	}
-
-	res[parts - 1] = str.substr(pos + 1);
-
-	if (parts == 1) {
-
-
-	}
-
-	return res;
-}
-
-class ChatMessage {
-
-private:
-	char* nick;
-	char* txt;
-	SYSTEMTIME  time;
-
-public:
-	ChatMessage() :nick{ NULL }, txt{ NULL }{
-		GetLocalTime(&time);
-	}
-	ChatMessage(char* nick, char* txt) :ChatMessage() {
-		setNick(nick);
-		setTxt(txt);
-	}
-
-	char* getNick() {
-		return nick;
-	}
-	char* getTxt() {
-		return txt;
-	}
-	SYSTEMTIME getSysTime() {
-		return time;
-	}
-
-	void setNick(const char* nick) {
-		if (!nick) {
-			return;
-		}
-		if (this->nick) {
-			delete this->nick;
-		}
-		this->nick = new char[strlen(nick)];
-		strcpy(this->nick, nick);
-	}
-	void setTxt(const char* txt) {
-		if (!txt) {
-			return;
-		}
-		if (this->txt) {
-			delete this->txt;
-		}
-		this->txt = new char[strlen(txt)];
-		strcpy(this->txt, txt);
-	}
-
-	bool parseString(char* str) {
-		std::string* userData = splitString(str, '\t');
-		setNick(userData[0].c_str());
-		setTxt(userData[1].c_str());
-
-		return userData;
-	}
-};
 
 std::list <ChatMessage>mes_buf;
 
@@ -132,7 +35,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	wc.hInstance = hInst;
 	wc.lpszClassName = WIN_CLASS_NAME;
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
+	//wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 
 	ATOM mainWin = RegisterClass(&wc);
 	if (mainWin == FALSE) {
@@ -367,23 +270,20 @@ DWORD CALLBACK StartServer(LPVOID params) {
 
 		// data is sum of all chunks from socket
 		// extract message from data
-		ChatMessage message;
-		message.parseString(data);
-		mes_buf.push_back(message);
-
-		const size_t MAX_LOGDATA = 543;
-		char logData[MAX_LOGDATA];
-
-		SYSTEMTIME time;
-		time = message.getSysTime();
-
-		//send message to log
-		_snprintf_s(logData, MAX_LOGDATA, MAX_LOGDATA, "%s %s [%dh %dm %ds]\0", message.getNick(), message.getTxt(), time.wHour, time.wMinute, time.wSecond);
-		SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)logData);
 		SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
-
-		// send answer to client - write in socket
-		// send(acceptSocket, "200", 4, 0);
+		ChatMessage message;
+		if (message.parseString(data)) {
+			//message.setDt(message.getDt() - 1111111);
+			mes_buf.push_back(message);
+			char* mts = message.toString();
+			SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)mts);
+			// send answer to client - write in socket
+			send(acceptSocket, mts, strlen(mts) + 1, 0);
+		}
+		else {
+			SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+			send(acceptSocket, "500", 4, 0);
+		}
 
 		// closing socket
 		shutdown(acceptSocket, SD_BOTH);

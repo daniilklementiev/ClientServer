@@ -3,7 +3,8 @@
 // Used by Server.rc
 //
 #define IDI_ICON1                       101
-
+#define _CRT_SECURE_NO_WARNINGS
+#pragma warning(disable : 4996)
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
