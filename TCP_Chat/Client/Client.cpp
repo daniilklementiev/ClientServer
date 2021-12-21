@@ -271,8 +271,10 @@ bool DeserializeMessage(char* str) {
 			r += 1;
 			str[len] = '\0';
 			ChatMessage m;
-			m.parseStringDT(start);
+			//if(m.parseStringDT(start)) SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
+			//else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Not parsed string");
 			msg.push_back(m);
+			
 			start = str + len + 1;
 	}
 		len++;
