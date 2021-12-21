@@ -7,6 +7,7 @@
 #include <Windows.h>
 #include <wchar.h>
 #include <stdio.h>
+#include <list>
 #include "resource.h"
 #include "../Server/Server/Chatmessage.h"
 
@@ -19,12 +20,14 @@ HWND grpEndpoint, grpLog, chatLog;
 HWND btnSend, btnName, btnReset;
 HWND editIP, editPort, editName, editMessage;
 
+std::list<ChatMessage> msg;
 char name[128];
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID); // User interface
 DWORD	CALLBACK SendChatMessage(LPVOID); // User interface
 DWORD	CALLBACK SetName(LPVOID);
+bool			 DeserializeMessage(char*);
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
@@ -207,7 +210,7 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 		return -30;
 	}
 
-	const size_t MSG_LEN = 512;
+	const size_t MSG_LEN = 4096;
 	const size_t NIK_LEN = 16;
 
 	char chatMsg[MSG_LEN];
@@ -239,13 +242,13 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN - 1, 0);
 	if (receivedCnt > 0) {
 		chatMsg[receivedCnt] = '\0';
-		ChatMessage *message = new ChatMessage();
+		/*ChatMessage *message = new ChatMessage();
 		message->parseStringDT(chatMsg);
 		if(message->parseStringDT(chatMsg))
 			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message->toClientString());
 		else
-			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Error");
-		
+			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Error");*/
+		DeserializeMessage(chatMsg);
 	}
 	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 
@@ -255,4 +258,26 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 
 	// SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-End-");
 	return 0;
+}
+
+bool DeserializeMessage(char* str) {
+	if (str == NULL) return false;
+	size_t len = 0, r = 0;
+	char* start = str;
+	msg.clear();
+	while (str[len] != '\0') {
+		if (str[len] == '\r') {
+			r += 1;
+			str[len] = '\0';
+			ChatMessage m;
+			m.parseStringDT(start);
+			msg.push_back(m);
+			start = str + len + 1;
+	}
+		len++;
+	}
+	ChatMessage m;
+	m.parseStringDT(start);
+	msg.push_back(m);
+	return true;
 }

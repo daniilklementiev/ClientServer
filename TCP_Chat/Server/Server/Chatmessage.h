@@ -6,6 +6,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <Windows.h>
+#include <list>
 
 std::string* splitString(std::string str, char sym) {
 	if (str.size() == 0) {
@@ -40,13 +41,11 @@ class ChatMessage {
 private:
 	char* nick;
 	char* txt;
-	SYSTEMTIME  data_time;
 	time_t dt;
 	char* _str;
 public:
-	ChatMessage() : nick{ NULL }, txt{ NULL }, dt{ time(NULL) }, _str{ NULL } {
-		GetLocalTime(&data_time);
-	}
+	std::list<ChatMessage>messages;
+	ChatMessage() : nick{ NULL }, txt{ NULL }, dt{ time(NULL) }, _str{ NULL } {}
 	ChatMessage(char* nick, char* txt) :ChatMessage() {
 		setNick(nick);
 		setTxt(txt);
@@ -61,10 +60,6 @@ public:
 	char* getTxt() {
 		return txt;
 	}
-	SYSTEMTIME getSysTime() {
-		return data_time;
-	}
-
 	void setNick(const char* nick) {
 		if (!nick) {
 			return;
@@ -87,6 +82,7 @@ public:
 	}
 	time_t getDt() { return this->dt; }
 	void setDt(time_t dt) { this->dt = dt; }
+	
 	bool parseStringDT(char* str) {
 		if (str == NULL) return false;
 
@@ -162,9 +158,8 @@ public:
 		char timestamp[16];
 		itoa(this->dt, timestamp, 10);
 		int dt_len = strlen(timestamp);
-
+		
 		if (_str) delete[] _str;
-
 		_str = new char[text_len + 1 /*\t*/ + nick_len + 1 /*\t*/ + dt_len + 1 /*\0*/];
 		sprintf(_str, "%s\t%s\t%s", this->txt, this->nick, timestamp);
 		return _str;
