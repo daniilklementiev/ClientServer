@@ -242,14 +242,16 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN - 1, 0);
 	if (receivedCnt > 0) {
 		chatMsg[receivedCnt] = '\0';
-		/*ChatMessage *message = new ChatMessage();
-		message->parseStringDT(chatMsg);
-		if(message->parseStringDT(chatMsg))
-			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message->toClientString());
-		else
-			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Error");*/
+		ChatMessage message;
+		for (std::list<ChatMessage>::iterator it = msg.begin(); it != msg.end(); it++) {
+			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)it->toClientString());
+		}
+
 		DeserializeMessage(chatMsg);
-		
+		if (message.parseStringDT(chatMsg)) {
+			msg.push_back(message);
+		}
+
 	}
 	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 
@@ -257,7 +259,7 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 	closesocket(clientSocket);
 	WSACleanup();
 
-	// SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-End-");
+	SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-End-");
 	return 0;
 }
 
@@ -265,16 +267,14 @@ bool DeserializeMessage(char* str) {
 	if (str == NULL) return false;
 	size_t len = 0, r = 0;
 	char* start = str;
-	msg.clear();
+	// msg.clear();
 	while (str[len] != '\0') {
 		if (str[len] == '\r') {
 			r += 1;
 			str[len] = '\0';
 			ChatMessage m;
-			//if(m.parseStringDT(start)) SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
-			//else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Not parsed string");
+			m.parseStringDT(start);
 			msg.push_back(m);
-			
 			start = str + len + 1;
 	}
 		len++;

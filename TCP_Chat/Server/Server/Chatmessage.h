@@ -111,7 +111,7 @@ public:
 		this->nick[tabPosition - i - 1] = '\0';
 		
 		// from TAB to END - dt
-		char timestamp[16];
+		char timestamp[64];
 		i = tabPosition + 1;
 		while(str[i] != '\0') {
 			timestamp[i - tabPosition - 1] = str[i];

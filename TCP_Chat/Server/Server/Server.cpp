@@ -26,6 +26,7 @@ char* SerializeMessages();
 
 std::list<ChatMessage> mes_buf;
 
+
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
 	hInst = hInstance;
@@ -336,6 +337,7 @@ char* SerializeMessages() {
 	ret[0] = '\0';
 	for (i = 0; i < n; i++)
 	{
+		
 		strcat(ret, strs[i]);
 		strcat(ret, "\r");
 	}
