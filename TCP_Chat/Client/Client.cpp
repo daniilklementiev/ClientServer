@@ -249,6 +249,7 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 		else
 			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Error");*/
 		DeserializeMessage(chatMsg);
+		
 	}
 	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 
