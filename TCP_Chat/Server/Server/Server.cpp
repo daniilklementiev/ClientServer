@@ -15,7 +15,7 @@ HINSTANCE hInst;
 HWND grpEndpoint, grpLog, serverLog;
 HWND btnStart, btnStop;
 HWND editIP, editPort;
-SOCKET listenSocket;		
+SOCKET listenSocket;
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID);		// User Interface
@@ -238,7 +238,6 @@ DWORD CALLBACK StartServer(LPVOID params) {
 	char data[DATA_LEN]; // bif buffer for all transfered chunks
 	int receivedCnt; // chunk size
 
-
 	while (true) {
 		// wait for network activity
 		acceptSocket = accept(listenSocket, NULL, NULL);
@@ -271,27 +270,38 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		} while (strlen(buff) == BUFF_LEN); // '\0' - end of data 
 
 		// data is sum of all chunks from socket
-		// extract message from data
-		SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
-		ChatMessage message;
-		if (message.parseString(data)) {
-			//message.setDt(message.getDt() - 1111111);
-			mes_buf.push_back(message);
-			if (mes_buf.size() > MAX_COUNT_MESSAGES) {
-				mes_buf.pop_front();
-			}
-			SerializeMessages();
-			//SendMessage(serverLog, LB_RESETCONTENT, 0, 0);
-			char* mts = message.toString();
-			SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)mts);
+
+		char* mts;
+		if (strlen(data) == 0) {	// only \0 in request
 			mts = SerializeMessages();
 			// send answer to client - write in socket
 			send(acceptSocket, mts, strlen(mts) + 1, 0);
 			//delete[] mts;
 		}
 		else {
-			SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
-			send(acceptSocket, "500", 4, 0);
+			// extract message from data
+			SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
+			ChatMessage message;
+			if (message.parseString(data)) {
+				//message.setDt(message.getDt() - 1111111);
+				mes_buf.push_back(message);
+				if (mes_buf.size() > MAX_COUNT_MESSAGES) {
+					mes_buf.pop_front();
+				}
+				SerializeMessages();
+				//SendMessage(serverLog, LB_RESETCONTENT, 0, 0);
+				mts = message.toString();
+				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)mts);
+				mts = SerializeMessages();
+				// send answer to client - write in socket
+				send(acceptSocket, mts, strlen(mts) + 1, 0);
+				//delete[] mts;
+			}
+			else {
+				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+				send(acceptSocket, "500", 4, 0);
+			}
+
 		}
 
 		// closing socket
@@ -325,13 +335,13 @@ char* SerializeMessages() {
 	size_t n = mes_buf.size();
 	char** strs = new char* [n];
 	size_t total = 0, i = 0;
-	
+
 	for (auto it = mes_buf.begin(); it != mes_buf.end(); it++) {
 		strs[i] = it->toString();
 		total += strlen(strs[i]) + 1;
 		++i;
 	}
-	
+
 	char* ret = new char[total];
 	ret[0] = '\0';
 	for (i = 0; i < n; i++)
