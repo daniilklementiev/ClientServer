@@ -15,21 +15,24 @@
 #define CMD_SET_NAME			1002
 #define CMD_RESET_NAME			1003
 #define CMD_BUTTON_AUTH			1004
+#define CMD_BUTTON_DISC			1005
 #define SYNC_TIMER_MESSAGE	    2001
 const size_t MSG_LEN = 4096;
 const size_t NIK_LEN = 16;
 
 HINSTANCE hInst;
 HWND grpEndpoint, grpLog, chatLog;
-HWND btnSend, btnName, btnReset, btnAuth;
+HWND btnSend, btnName, btnReset, btnAuth, btnDscn;
 HWND editIP, editPort, editName, editMessage;
-
+HANDLE sendLock = NULL;
+HINSTANCE hPrev;
 
 char chatMsg[MSG_LEN];
 char chatNik[NIK_LEN];
 
 std::list<ChatMessage> msg;
 char name[128];
+
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID);			// User interface
@@ -38,6 +41,7 @@ DWORD	CALLBACK SendChatMessage(LPVOID);	//
 DWORD	CALLBACK SendToServer(LPVOID);		// 
 DWORD	CALLBACK SetName(LPVOID);
 bool			 DeserializeMessage(char*);
+
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
@@ -56,21 +60,26 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP);
 		return -1;
 	}
-
+	
 	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Client",
 		WS_OVERLAPPEDWINDOW,
 		300, 300, 640, 480,
 		NULL, NULL, hInst, NULL);
+
 	if (hwnd == FALSE) {
 		MessageBoxW(NULL, L"Creating window error", L"Launch error client", MB_OK | MB_ICONSTOP);
 		return -2;
 	}
 	ShowWindow(hwnd, showMode);
+
+
 	MSG msg = { };
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessageW(&msg);
 	}
+
+	
 	return 0;
 }
 
@@ -78,7 +87,29 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
 	case WM_CREATE: {
 		CreateUI(&hWnd);
-		
+		sendLock = CreateMutex(NULL, FALSE, NULL);
+		if (sendLock == NULL)
+		{
+			MessageBoxW(NULL, L"Mutex not created", L"APP STOPPED", MB_ICONWARNING | MB_OK);
+			PostQuitMessage(0);
+			return 0;
+		}
+
+		if (hPrev != NULL) {
+			char name[128];
+			SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
+			char symb = char((rand() % int('Z') - 1) + int('A'));
+			char newname[129];
+			for (size_t i = 0; i < (strlen(name) + 2); i++)
+			{
+				if (name[i] == '\0')
+				{
+					name[i] = symb;
+				}
+				newname[i] = name[i];
+			}
+			SendMessageA(editName, WM_SETTEXT, 129, (LPARAM)newname);
+		}
 		break;
 	}
 	case WM_COMMAND: {
@@ -87,6 +118,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		switch (cmd) {
 		case CMD_SEND_MESSAGE: {
 			SendMessageW(btnSend, WM_KILLFOCUS, 0, 0);
+			SendMessageW(chatLog, LB_RESETCONTENT, 0, 0);
 			CreateThread(NULL, 0, SendChatMessage, &hWnd, 0, NULL);
 			break;
 		}
@@ -104,9 +136,34 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			break;
 		}
 		case CMD_BUTTON_AUTH: {
+			int n = SendToServer((LPVOID)"\0");
 			SendMessage(btnAuth, WM_KILLFOCUS, 0, 0);
-			EnableWindow(btnAuth, FALSE);
-			SetTimer(hWnd, SYNC_TIMER_MESSAGE, 1000, NULL);
+			if (n > 0) {
+				SendMessageW(chatLog, LB_RESETCONTENT, 0, 0);
+				EnableWindow(btnSend, TRUE);
+				SetTimer(hWnd, SYNC_TIMER_MESSAGE, 1000, NULL);
+				CreateThread(NULL, 0, SyncChatMessage, &hWnd, 0, NULL);
+				MessageBoxW(NULL, L"Updating toggled on", L"Succesful start", MB_OK | MB_ICONWARNING);
+				ShowWindow(btnAuth, SW_HIDE);
+				ShowWindow(btnDscn, SW_NORMAL);
+			}
+			else {
+				SendMessageW(chatLog, LB_RESETCONTENT, 0, 0);
+				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Connecting error. Try again!");
+				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to connect.");
+			}
+			
+			break;
+		}
+		case CMD_BUTTON_DISC: {
+			KillTimer(hWnd, SYNC_TIMER_MESSAGE);
+			ShowWindow(btnAuth, SW_NORMAL);
+			ShowWindow(btnDscn, SW_HIDE);
+			EnableWindow(btnSend, FALSE);
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L" ");
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Disconnected from server.");
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Updating toggled off.");
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to connect.");
 			break;
 		}
 		}
@@ -118,10 +175,12 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		}
 		break;
 	}
-	case WM_DESTROY:
+	case WM_DESTROY: {
 		KillTimer(hWnd, SYNC_TIMER_MESSAGE);
+		CloseHandle(sendLock);
 		PostQuitMessage(0);
 		break;
+	}
 	case WM_PAINT: {
 		PAINTSTRUCT ps;
 		HDC dc = BeginPaint(hWnd, &ps);
@@ -144,6 +203,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 DWORD CALLBACK CreateUI(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
+
 	grpEndpoint = CreateWindowExW(0, L"Button", L"EndPoint",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		10, 10, 150, 300, hWnd, 0, hInst, NULL);
@@ -177,67 +237,18 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	btnReset = CreateWindowExW(0, L"Button", L"Reset Name", WS_CHILD | WS_VISIBLE,
 		30, 200, 100, 25, hWnd, (HMENU)CMD_RESET_NAME, hInst, NULL);
 
-	btnAuth = CreateWindowExW(0, L"Button", L"Auth", WS_CHILD | WS_VISIBLE, 
+	btnAuth = CreateWindowExW(0, L"Button", L"Auth", WS_CHILD | WS_VISIBLE,
 		45, 75, 75, 23, hWnd, (HMENU)CMD_BUTTON_AUTH, hInst, NULL);
+	btnDscn = CreateWindowExW(0, L"Button", L"Disconnect", WS_CHILD | WS_VISIBLE,
+		45, 75, 75, 23, hWnd, (HMENU)CMD_BUTTON_DISC, hInst, NULL);
+	ShowWindow(btnDscn, SW_HIDE);
+	EnableWindow(btnSend, FALSE);
+	SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to get started");
 	return 0;
 }
 
 DWORD CALLBACK SendChatMessage(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
-
-	SOCKET clientSocket;
-	const size_t MAX_LEN = 100;
-	WCHAR str[MAX_LEN];
-
-	WSADATA wsaData;
-	int err;
-
-	// WinSock API initializing (~ wsaData = new WSA(2.2) )
-	err = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (err != 0) {
-		_snwprintf_s(str, MAX_LEN,
-			L"Startup failed, error %d", err);
-		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
-		return -10;
-	}
-
-	// Socket preparing
-	clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (clientSocket == INVALID_SOCKET) {
-		_snwprintf_s(str, MAX_LEN,
-			L"Socket failed, error %d", WSAGetLastError());
-		WSACleanup();
-		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
-		return -20;
-	}
-
-	// -- Socket configuration --
-	SOCKADDR_IN addr;   // Config structure
-
-	addr.sin_family = AF_INET;  // 1. Network type (family)
-
-	char ip[20];
-	LRESULT ipLen = SendMessageA(editIP, WM_GETTEXT, 19, (LPARAM)ip);
-	ip[ipLen] = '\0';
-	inet_pton(AF_INET, ip, &addr.sin_addr);  // 2. IP
-
-	char port[8];
-	LRESULT portLen = SendMessageA(editPort, WM_GETTEXT, 7, (LPARAM)port);
-	port[portLen] = '\0';
-	addr.sin_port = htons(atoi(port));  // 3. Port
-	// -- end configuration of [addr] --
-
-	// Connect to endpoint
-	err = connect(clientSocket, (SOCKADDR*)&addr, sizeof(addr));
-	if (err == SOCKET_ERROR) {
-		_snwprintf_s(str, MAX_LEN,
-			L"Socket connect error %d", WSAGetLastError());
-		closesocket(clientSocket);
-		WSACleanup();
-		clientSocket = INVALID_SOCKET;
-		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
-		return -30;
-	}
 
 	int nikLen = SendMessageA(editName, WM_GETTEXT,
 		NIK_LEN - 1, (LPARAM)chatNik);
@@ -250,44 +261,24 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 	strcat(chatMsg, "\t");
 	strcat(chatMsg, chatNik);
 
-	int sent = send(clientSocket, chatMsg, msgLen + nikLen + 2, 0);
-	if (sent == SOCKET_ERROR) {
-		_snwprintf_s(str, MAX_LEN,
-			L"Sending error %d", WSAGetLastError());
-		closesocket(clientSocket);
-		WSACleanup();
-		clientSocket = INVALID_SOCKET;
-		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
-		return -40;
-	}
-
-	// receive in the same buffer - chatMsg
-	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN - 1, 0);
-	if (receivedCnt > 0) {
-		chatMsg[receivedCnt] = '\0';
-		ChatMessage message;
+	if (SendToServer(chatMsg) > 0)
 		DeserializeMessage(chatMsg);
-
-		/*for (auto i = msg.begin(); i != msg.end(); i++) {
-
-			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)i->toClientString());
-
-		}*/
-
+	else {
+		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Send error");
 	}
-	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 
-	shutdown(clientSocket, SD_BOTH);
-	closesocket(clientSocket);
-	WSACleanup();
-
-	// SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-End-");
 	return 0;
 }
 
 DWORD	CALLBACK SyncChatMessage(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
-	
+	chatMsg[0] = '\0';
+	if (SendToServer(chatMsg) > 0)
+		DeserializeMessage(chatMsg);
+	else {
+		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Sync error");
+	}
+
 	return 0;
 }
 
@@ -321,11 +312,14 @@ bool DeserializeMessage(char* str) {
 			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
 		}
 		else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Message parse error");
-		return true;
 	}
+	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
+	return true;
 }
 
+
 DWORD CALLBACK SendToServer(LPVOID params) {
+
 	char* data = (char*)params;
 	if (data == NULL) return -1;
 	SOCKET clientSocket;
@@ -334,7 +328,8 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 
 	WSADATA wsaData;
 	int err;
-
+	// look mutex
+	WaitForSingleObject(sendLock, INFINITE);
 	err = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (err != 0) {
 		_snwprintf_s(str, MAX_LEN, L"Startup failed, error %d", err);
@@ -350,39 +345,38 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 		return -20;
 	}
 
-	// -- Socket configuration --
-	SOCKADDR_IN addr;   // Config structure
-
-	addr.sin_family = AF_INET;  // 1. Network type (family)
+	SOCKADDR_IN addr;
+	addr.sin_family = AF_INET;
 
 	char ip[20];
 	LRESULT ipLen = SendMessageA(editIP, WM_GETTEXT, 19, (LPARAM)ip);
 	ip[ipLen] = '\0';
-	inet_pton(AF_INET, ip, &addr.sin_addr);  // 2. IP
+	inet_pton(AF_INET, ip, &addr.sin_addr);
 
 	char port[8];
 	LRESULT portLen = SendMessageA(editPort, WM_GETTEXT, 7, (LPARAM)port);
 	port[portLen] = '\0';
-	addr.sin_port = htons(atoi(port));  // 3. Port
-	// -- end configuration of [addr] --
+	addr.sin_port = htons(atoi(port));
 
-	// Connect to endpoint
 	err = connect(clientSocket, (SOCKADDR*)&addr, sizeof(addr));
+	int error = WSAGetLastError();
 	if (err == SOCKET_ERROR) {
-		_snwprintf_s(str, MAX_LEN,
-			L"Socket connect error %d", WSAGetLastError());
-		closesocket(clientSocket);
-		WSACleanup();
-		clientSocket = INVALID_SOCKET;
-		SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
-		return -30;
+		if (error == 10061) {
+			return -80;
+		}
+		else {
+			_snwprintf_s(str, MAX_LEN, L"Socket connect error %d", WSAGetLastError());
+			closesocket(clientSocket);
+			WSACleanup();
+			clientSocket = INVALID_SOCKET;
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)str);
+			return -30;
+		}
 	}
 
-
-	int sent = send(clientSocket, "\0", 1, 0);
+	int sent = send(clientSocket, data, strlen(data) + 1, 0);
 	if (sent == SOCKET_ERROR) {
-		_snwprintf_s(str, MAX_LEN,
-			L"Sending error %d", WSAGetLastError());
+		_snwprintf_s(str, MAX_LEN, L"Sending error %d", WSAGetLastError());
 		closesocket(clientSocket);
 		WSACleanup();
 		clientSocket = INVALID_SOCKET;
@@ -390,14 +384,19 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 		return -40;
 	}
 
-	// receive in the same buffer - chatMsg
 	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN - 1, 0);
 	if (receivedCnt > 0) {
 		chatMsg[receivedCnt] = '\0';
-		ChatMessage message;
-		DeserializeMessage(chatMsg);
+	}
+	else {
+		chatMsg[0] = '\0';
 
 	}
-	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
-	return 0;
+	shutdown(clientSocket, SD_BOTH);
+	closesocket(clientSocket);
+	WSACleanup();
+	// Unlock mutex
+	ReleaseMutex(sendLock);
+	return receivedCnt;
 }
+

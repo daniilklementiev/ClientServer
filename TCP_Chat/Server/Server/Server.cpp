@@ -274,9 +274,8 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		char* mts;
 		if (strlen(data) == 0) {	// only \0 in request
 			mts = SerializeMessages();
-			// send answer to client - write in socket
 			send(acceptSocket, mts, strlen(mts) + 1, 0);
-			//delete[] mts;
+			delete[] mts;
 		}
 		else {
 			// extract message from data
@@ -295,7 +294,7 @@ DWORD CALLBACK StartServer(LPVOID params) {
 				mts = SerializeMessages();
 				// send answer to client - write in socket
 				send(acceptSocket, mts, strlen(mts) + 1, 0);
-				//delete[] mts;
+				delete[] mts;
 			}
 			else {
 				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
@@ -332,7 +331,14 @@ char* SerializeMessages() {
 	// collect them
 	// calc size and build string
 	// ==> StringBuilder
+	char* ret;
+
 	size_t n = mes_buf.size();
+	if (n == 0) {
+		ret = new char[1]{ '\0' };
+		return ret;
+	}
+
 	char** strs = new char* [n];
 	size_t total = 0, i = 0;
 
@@ -341,8 +347,7 @@ char* SerializeMessages() {
 		total += strlen(strs[i]) + 1;
 		++i;
 	}
-
-	char* ret = new char[total];
+	ret = new char[total + 1];
 	ret[0] = '\0';
 	for (i = 0; i < n; i++)
 	{
