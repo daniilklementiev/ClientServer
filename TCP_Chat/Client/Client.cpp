@@ -60,7 +60,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP);
 		return -1;
 	}
-	
+
 	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Client",
 		WS_OVERLAPPEDWINDOW,
 		300, 300, 640, 480,
@@ -79,7 +79,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		DispatchMessageW(&msg);
 	}
 
-	
+
 	return 0;
 }
 
@@ -152,7 +152,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Connecting error. Try again!");
 				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to connect.");
 			}
-			
+
 			break;
 		}
 		case CMD_BUTTON_DISC: {
@@ -387,43 +387,15 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 	int receivedCnt = recv(clientSocket, chatMsg, MSG_LEN - 1, 0);
 	if (receivedCnt > 0) {
 		chatMsg[receivedCnt] = '\0';
-		/*ChatMessage *message = new ChatMessage();
-		message->parseStringDT(chatMsg);
-		if(message->parseStringDT(chatMsg))
-			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)message->toClientString());
-		else
-			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Error");*/
-		DeserializeMessage(chatMsg);
-		
+	}
+	else {
+		chatMsg[0] = '\0';
+
 	}
 	shutdown(clientSocket, SD_BOTH);
 	closesocket(clientSocket);
 	WSACleanup();
-
-	// SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"-End-");
-	return 0;
-}
-
-bool DeserializeMessage(char* str) {
-	if (str == NULL) return false;
-	size_t len = 0, r = 0;
-	char* start = str;
-	msg.clear();
-	while (str[len] != '\0') {
-		if (str[len] == '\r') {
-			r += 1;
-			str[len] = '\0';
-			ChatMessage m;
-			//if(m.parseStringDT(start)) SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
-			//else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Not parsed string");
-			msg.push_back(m);
-			
-			start = str + len + 1;
-	}
-		len++;
-	}
-	ChatMessage m;
-	m.parseStringDT(start);
-	msg.push_back(m);
-	return true;
+	// Unlock mutex
+	ReleaseMutex(sendLock);
+	return receivedCnt;
 }

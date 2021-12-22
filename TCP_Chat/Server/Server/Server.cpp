@@ -16,6 +16,8 @@ HWND grpEndpoint, grpLog, serverLog;
 HWND btnStart, btnStop;
 HWND editIP, editPort;
 SOCKET listenSocket;
+static int AmountWindows = 0;
+
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID);		// User Interface
@@ -26,14 +28,14 @@ char* SerializeMessages();
 
 std::list<ChatMessage> mes_buf;
 
-
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
+	++AmountWindows;
 	hInst = hInstance;
 
 	const WCHAR WIN_CLASS_NAME[] = L"ServerWindow";
 	WNDCLASS wc = {};
-
+	
 	wc.lpfnWndProc = WinProc;
 	wc.hInstance = hInst;
 	wc.lpszClassName = WIN_CLASS_NAME;
@@ -109,6 +111,8 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 DWORD CALLBACK CreateUI(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
+	
+
 	grpEndpoint = CreateWindowExW(0, L"Button", L"EndPoint",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		10, 10, 150, 70, hWnd, 0, hInst, NULL);
@@ -352,7 +356,6 @@ char* SerializeMessages() {
 	ret[0] = '\0';
 	for (i = 0; i < n; i++)
 	{
-		
 		strcat(ret, strs[i]);
 		strcat(ret, "\r");
 	}
@@ -360,4 +363,3 @@ char* SerializeMessages() {
 
 	return ret;
 }
-
