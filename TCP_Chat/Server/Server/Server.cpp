@@ -16,7 +16,7 @@ HWND grpEndpoint, grpLog, serverLog;
 HWND btnStart, btnStop;
 HWND editIP, editPort;
 SOCKET listenSocket;
-
+long long mId;
 
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
@@ -69,6 +69,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
 	case WM_CREATE: {
 		CreateUI(&hWnd);
+		mId = time(NULL);
 		break;
 	}
 	case WM_COMMAND: {
@@ -287,6 +288,8 @@ DWORD CALLBACK StartServer(LPVOID params) {
 			ChatMessage message;
 			if (message.parseString(data)) {
 				//message.setDt(message.getDt() - 1111111);
+				
+				message.setId(mId++);
 				mes_buf.push_back(message);
 				if (mes_buf.size() > MAX_COUNT_MESSAGES) {
 					mes_buf.pop_front();

@@ -95,22 +95,6 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			PostQuitMessage(0);
 			return 0;
 		}
-
-		if (hPrev != NULL) {
-			char name[128];
-			SendMessageA(editName, WM_GETTEXT, 128, (LPARAM)name);
-			char symb = char((rand() % int('Z') - 1) + int('A'));
-			char newname[129];
-			for (size_t i = 0; i < (strlen(name) + 2); i++)
-			{
-				if (name[i] == '\0')
-				{
-					name[i] = symb;
-				}
-				newname[i] = name[i];
-			}
-			SendMessageA(editName, WM_SETTEXT, 129, (LPARAM)newname);
-		}
 		break;
 	}
 	case WM_COMMAND: {
@@ -205,16 +189,6 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 DWORD CALLBACK CreateUI(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
 	
-	char symb = '1';
-	FILE* file = fopen("count.txt", "wt");
-	FILE* file2 = fopen("count.txt", "rt");
-	fwrite(&symb, sizeof(symb), 1, file);
-	char buff;
-	fread(&buff, sizeof(char), 1, file2);
-	fclose(file);
-	fclose(file2);
-
-
 	grpEndpoint = CreateWindowExW(0, L"Button", L"EndPoint",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		10, 10, 150, 300, hWnd, 0, hInst, NULL);
@@ -260,7 +234,7 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 
 DWORD CALLBACK SendChatMessage(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
-
+	WaitForSingleObject(sendLock, INFINITE);
 	int nikLen = SendMessageA(editName, WM_GETTEXT,
 		NIK_LEN - 1, (LPARAM)chatNik);
 	chatNik[nikLen] = '\0';
@@ -277,23 +251,54 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 	else {
 		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Send error");
 	}
-
+	ReleaseMutex(sendLock);
 	return 0;
 }
 
 DWORD	CALLBACK SyncChatMessage(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
+	WaitForSingleObject(sendLock, INFINITE);
 	chatMsg[0] = '\0';
 	if (SendToServer(chatMsg) > 0)
 		DeserializeMessage(chatMsg);
 	else {
 		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Sync error");
 	}
-
+	ReleaseMutex(sendLock);
 	return 0;
 }
 
 bool DeserializeMessage(char* str) {
+	WaitForSingleObject(sendLock, INFINITE);
+	if (str == NULL) {
+		return false;
+	}
+	size_t len = 0;
+	char* start = str;
+	bool isParsing = (str[len] != '\0');
+	msg.clear();
+	SendMessageA(chatLog, LB_RESETCONTENT, 0, 0);
+	while (isParsing) {
+		if (str[len] == '\r' || str[len] == '\0') {
+			if (str[len] == '\0') isParsing = false;
+			str[len] = '\0';
+			ChatMessage m;
+			if (m.parseStringDT(start)) {
+				
+				msg.push_back(m);
+				SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
+			}
+			else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Message parse error");
+			start = str + len + 1;
+		}
+		len += 1;
+	}
+	ReleaseMutex(sendLock);
+	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
+	return true;
+}
+
+ /*bool DeserializeMessage(char* str) {
 	if (str == NULL) {
 		return false;
 	}
@@ -327,7 +332,7 @@ bool DeserializeMessage(char* str) {
 	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 	return true;
 }
-
+*/
 
 DWORD CALLBACK SendToServer(LPVOID params) {
 
