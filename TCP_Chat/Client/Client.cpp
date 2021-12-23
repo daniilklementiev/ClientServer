@@ -30,6 +30,7 @@ HINSTANCE hPrev;
 char chatMsg[MSG_LEN];
 char chatNik[NIK_LEN];
 
+
 std::list<ChatMessage> msg;
 char name[128];
 
@@ -60,7 +61,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		MessageBoxW(NULL, L"Register class error", L"Launch error client", MB_OK | MB_ICONSTOP);
 		return -1;
 	}
-	
+
 	HWND hwnd = CreateWindowExW(0, WIN_CLASS_NAME, L"TCP Chat - Client",
 		WS_OVERLAPPEDWINDOW,
 		300, 300, 640, 480,
@@ -79,7 +80,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		DispatchMessageW(&msg);
 	}
 
-	
+
 	return 0;
 }
 
@@ -152,7 +153,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Connecting error. Try again!");
 				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to connect.");
 			}
-			
+
 			break;
 		}
 		case CMD_BUTTON_DISC: {
@@ -203,7 +204,14 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 DWORD CALLBACK CreateUI(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
-
+	/*char symb = '1';
+	FILE* file = fopen("count.txt", "wt");
+	FILE* file2 = fopen("count.txt", "rt");
+	fwrite(&symb, sizeof(symb), 1, file);
+	char buff;
+	fread(&buff, sizeof(char), 1, file2);
+	fclose(file);
+	fclose(file2);*/
 	grpEndpoint = CreateWindowExW(0, L"Button", L"EndPoint",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		10, 10, 150, 300, hWnd, 0, hInst, NULL);
@@ -399,4 +407,3 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 	ReleaseMutex(sendLock);
 	return receivedCnt;
 }
-
