@@ -30,6 +30,7 @@ HINSTANCE hPrev;
 char chatMsg[MSG_LEN];
 char chatNik[NIK_LEN];
 
+
 std::list<ChatMessage> msg;
 char name[128];
 
@@ -203,7 +204,14 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 DWORD CALLBACK CreateUI(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
-
+	/*char symb = '1';
+	FILE* file = fopen("count.txt", "wt");
+	FILE* file2 = fopen("count.txt", "rt");
+	fwrite(&symb, sizeof(symb), 1, file);
+	char buff;
+	fread(&buff, sizeof(char), 1, file2);
+	fclose(file);
+	fclose(file2);*/
 	grpEndpoint = CreateWindowExW(0, L"Button", L"EndPoint",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		10, 10, 150, 300, hWnd, 0, hInst, NULL);
