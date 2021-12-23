@@ -82,7 +82,7 @@ public:
 	}
 	time_t getDt() { return this->dt; }
 	void setDt(time_t dt) { this->dt = dt; }
-	
+
 	bool parseStringDT(char* str) {
 		if (str == NULL) return false;
 
@@ -109,11 +109,11 @@ public:
 		this->nick = new char[tabPosition - i + 1];
 		for (int j = i + 1; j < tabPosition; ++j) this->nick[j - i - 1] = str[j];
 		this->nick[tabPosition - i - 1] = '\0';
-		
+
 		// from TAB to END - dt
 		char timestamp[16];
 		i = tabPosition + 1;
-		while(str[i] != '\0') {
+		while (str[i] != '\0') {
 			timestamp[i - tabPosition - 1] = str[i];
 			i++;
 		}
@@ -158,7 +158,7 @@ public:
 		char timestamp[16];
 		itoa(this->dt, timestamp, 10);
 		int dt_len = strlen(timestamp);
-		
+
 		if (_str) delete[] _str;
 		_str = new char[text_len + 1 /*\t*/ + nick_len + 1 /*\t*/ + dt_len + 1 /*\0*/];
 		sprintf(_str, "%s\t%s\t%s", this->txt, this->nick, timestamp);
@@ -192,8 +192,8 @@ public:
 		else {
 			sprintf(_str, "[%d.%d.%d] %s -> %s", 1 + t->tm_mday, 1 + t->tm_mon, 1900 + t->tm_year, this->nick, this->txt);
 		}
-		
-		
+
+
 		return _str;
 	}
 
