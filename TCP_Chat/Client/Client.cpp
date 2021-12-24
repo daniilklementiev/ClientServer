@@ -31,7 +31,8 @@ char chatMsg[MSG_LEN];
 char chatNik[NIK_LEN];
 
 
-std::list<ChatMessage> msg;
+std::list<ChatMessage>* msg = new std::list<ChatMessage>;
+
 char name[128];
 
 
@@ -41,6 +42,7 @@ DWORD	CALLBACK SyncChatMessage(LPVOID);	//
 DWORD	CALLBACK SendChatMessage(LPVOID);	// 
 DWORD	CALLBACK SendToServer(LPVOID);		// 
 DWORD	CALLBACK SetName(LPVOID);
+DWORD	CALLBACK AuthUser(LPVOID);
 bool			 DeserializeMessage(char*);
 
 
@@ -210,7 +212,7 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	editMessage = CreateWindowExW(0, L"Edit", L"Message", WS_CHILD | WS_VISIBLE | ES_MULTILINE | WS_BORDER,
 		20, 110, 120, 50, hWnd, 0, hInst, 0);
 
-	editName = CreateWindowExW(0, L"Edit", L"Name", WS_CHILD | WS_VISIBLE | WS_BORDER,
+	editName = CreateWindowExW(0, L"Edit", L"Login", WS_CHILD | WS_VISIBLE | WS_BORDER,
 		20, 170, 130, 20, hWnd, 0, hInst, 0);
 
 	btnSend = CreateWindowExW(0, L"Button", L"Send", WS_CHILD | WS_VISIBLE,
@@ -275,8 +277,9 @@ bool DeserializeMessage(char* str) {
 	}
 	size_t len = 0;
 	char* start = str;
+	std::list<ChatMessage>* newMsg = new std::list<ChatMessage>;
 	bool isParsing = (str[len] != '\0');
-	msg.clear();
+	msg->clear();
 	SendMessageA(chatLog, LB_RESETCONTENT, 0, 0);
 	while (isParsing) {
 		if (str[len] == '\r' || str[len] == '\0') {
@@ -285,7 +288,7 @@ bool DeserializeMessage(char* str) {
 			ChatMessage m;
 			if (m.parseStringDT(start)) {
 
-				msg.push_back(m);
+				msg->push_back(m);
 				SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
 			}
 			else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Message parse error");
@@ -293,6 +296,21 @@ bool DeserializeMessage(char* str) {
 		}
 		len += 1;
 	}
+	ChatMessage n;
+	n.parseStringDT(start);
+	newMsg->push_back(n);
+	bool msgflag = false;
+
+	for (auto n = newMsg->begin(); n != newMsg->end(); n++) {
+		for (auto m = msg->begin(); m != msg->end(); m++) {
+			if (m->getId() == n->getId()) msgflag = true;
+		}
+		if (!msgflag) SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)n->toClientString());
+		msgflag = false;
+	}
+	delete msg;
+	msg = newMsg;
+	
 	ReleaseMutex(sendLock);
 	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 	return true;
