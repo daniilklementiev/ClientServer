@@ -60,6 +60,7 @@ public:
 		this->id = id;
 	}
 
+
 	bool  parseStringDT(char* str) {
 		if (str == NULL) return false;
 

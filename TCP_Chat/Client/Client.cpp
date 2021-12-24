@@ -17,6 +17,7 @@
 #define CMD_BUTTON_AUTH			1004
 #define CMD_BUTTON_DISC			1005
 #define SYNC_TIMER_MESSAGE	    2001
+
 const size_t MSG_LEN = 4096;
 const size_t NIK_LEN = 16;
 
@@ -25,16 +26,16 @@ HWND grpEndpoint, grpLog, chatLog;
 HWND btnSend, btnName, btnReset, btnAuth, btnDscn;
 HWND editIP, editPort, editName, editMessage;
 HANDLE sendLock = NULL;
-HINSTANCE hPrev;
+
 
 char chatMsg[MSG_LEN];
 char chatNik[NIK_LEN];
 
 
 std::list<ChatMessage>* msg = new std::list<ChatMessage>;
-
+std::list<ChatMessage>* names = new std::list<ChatMessage>;
 char name[128];
-
+bool isConnected = false;
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID);			// User interface
@@ -42,7 +43,8 @@ DWORD	CALLBACK SyncChatMessage(LPVOID);	//
 DWORD	CALLBACK SendChatMessage(LPVOID);	// 
 DWORD	CALLBACK SendToServer(LPVOID);		// 
 DWORD	CALLBACK SetName(LPVOID);
-DWORD	CALLBACK AuthUser(LPVOID);
+DWORD	CALLBACK JoinServerClick(LPVOID);
+DWORD CALLBACK LeaveFromServer(LPVOID);
 bool			 DeserializeMessage(char*);
 
 
@@ -123,36 +125,12 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			break;
 		}
 		case CMD_BUTTON_AUTH: {
-			int n = SendToServer((LPVOID)"\0");
-			SendMessage(btnAuth, WM_KILLFOCUS, 0, 0);
-			if (n > 0) {
-				SendMessageW(chatLog, LB_RESETCONTENT, 0, 0);
-				EnableWindow(btnSend, TRUE);
-				SetTimer(hWnd, SYNC_TIMER_MESSAGE, 1000, NULL);
-				CreateThread(NULL, 0, SyncChatMessage, &hWnd, 0, NULL);
-				MessageBoxW(NULL, L"Updating toggled on", L"Succesful start", MB_OK | MB_ICONWARNING);
-				ShowWindow(btnAuth, SW_HIDE);
-				ShowWindow(btnDscn, SW_NORMAL);
-			}
-			else {
-				SendMessageW(chatLog, LB_RESETCONTENT, 0, 0);
-				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Connecting error. Try again!");
-				SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to connect.");
-			}
-
+			if (isConnected == false) CreateThread(NULL, 0, JoinServerClick, &hWnd, 0, NULL); 
+			
+			else CreateThread(NULL, 0, LeaveFromServer, &hWnd, 0, NULL); 
 			break;
 		}
-		case CMD_BUTTON_DISC: {
-			KillTimer(hWnd, SYNC_TIMER_MESSAGE);
-			ShowWindow(btnAuth, SW_NORMAL);
-			ShowWindow(btnDscn, SW_HIDE);
-			EnableWindow(btnSend, FALSE);
-			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L" ");
-			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Disconnected from server.");
-			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Updating toggled off.");
-			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to connect.");
-			break;
-		}
+		
 		}
 		break;
 	}
@@ -224,12 +202,8 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 	btnReset = CreateWindowExW(0, L"Button", L"Reset Name", WS_CHILD | WS_VISIBLE,
 		30, 200, 100, 25, hWnd, (HMENU)CMD_RESET_NAME, hInst, NULL);
 
-	btnAuth = CreateWindowExW(0, L"Button", L"Auth", WS_CHILD | WS_VISIBLE,
+	btnAuth = CreateWindowExW(0, L"Button", L"->", WS_CHILD | WS_VISIBLE,
 		45, 75, 75, 23, hWnd, (HMENU)CMD_BUTTON_AUTH, hInst, NULL);
-	btnDscn = CreateWindowExW(0, L"Button", L"Disconnect", WS_CHILD | WS_VISIBLE,
-		45, 75, 75, 23, hWnd, (HMENU)CMD_BUTTON_DISC, hInst, NULL);
-	ShowWindow(btnDscn, SW_HIDE);
-	EnableWindow(btnSend, FALSE);
 	SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Click \"Auth\" to get started");
 	return 0;
 }
@@ -301,11 +275,11 @@ bool DeserializeMessage(char* str) {
 	newMsg->push_back(n);
 	bool msgflag = false;
 
-	for (auto n = newMsg->begin(); n != newMsg->end(); n++) {
-		for (auto m = msg->begin(); m != msg->end(); m++) {
-			if (m->getId() == n->getId()) msgflag = true;
+	for (auto it1 = newMsg->begin(); it1!= newMsg->end(); it1++) {
+		for (auto it2 = msg->begin(); it2 != msg->end(); it2++) {
+			if (it2->getId() == it1->getId()) msgflag = true;
 		}
-		if (!msgflag) SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)n->toClientString());
+		if (!msgflag) SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)it1->toClientString());
 		msgflag = false;
 	}
 	delete msg;
@@ -432,4 +406,61 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 	// Unlock mutex
 	ReleaseMutex(sendLock);
 	return receivedCnt;
+}
+
+DWORD CALLBACK JoinServerClick(LPVOID params) {
+	HWND hWnd = *((HWND*)params);
+	isConnected = true;
+	chatNik[0] = '\b';
+	int nickLen = SendMessageA(editName, WM_GETTEXT, NIK_LEN - 1, (LPARAM)(chatNik + 1));
+	chatNik[nickLen + 1] = '\0';
+	int res = (int)SendToServer(chatNik);
+	
+	if (res < 0) {  // error
+		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Join error");
+	}
+	else {
+		// server response (201/401) stored in chatMsg
+		if (chatMsg[0] == '2') { // Accepted
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Accepted");
+			SetTimer(hWnd, SYNC_TIMER_MESSAGE, 1000, NULL);
+			EnableWindow(btnSend, TRUE);
+			EnableWindow(btnName, FALSE);
+			EnableWindow(editName, FALSE);
+			EnableWindow(btnReset, FALSE);
+			SendMessageW(btnAuth, WM_SETTEXT, 0, (LPARAM)L"<-");
+		}
+		else {	// Restricted
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Restricted");
+		}
+	}
+	return 0;
+}
+
+DWORD CALLBACK LeaveFromServer(LPVOID params) {
+	isConnected = false;
+	HWND hWnd = *((HWND*)params);
+	chatNik[0] = '\a';
+	int nickLen = SendMessageA(editName, WM_GETTEXT, NIK_LEN - 1, (LPARAM)(chatNik + 1));
+	chatNik[nickLen + 1] = '\0';
+	int res = (int)SendToServer(chatNik);
+	if (res < 0) {  // error
+		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Join error");
+	}
+	else {
+		// server response (201/401) stored in chatMsg
+		if (chatMsg[0] == '2') { // Accepted
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Disconnected");
+			KillTimer(hWnd, SYNC_TIMER_MESSAGE);
+			EnableWindow(btnSend, FALSE);
+			EnableWindow(editName, TRUE);
+			EnableWindow(btnName, TRUE);
+			EnableWindow(btnReset, TRUE);
+			SendMessageW(btnAuth, WM_SETTEXT, 0, (LPARAM)L"->");
+		}
+		else {	// Restricted
+			SendMessageW(chatLog, LB_ADDSTRING, 0, (LPARAM)L"Server error");
+		}
+	}
+	return 0;
 }

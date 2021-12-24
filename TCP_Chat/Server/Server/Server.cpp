@@ -17,7 +17,7 @@ HWND btnStart, btnStop;
 HWND editIP, editPort;
 SOCKET listenSocket;
 long long mId;
-
+bool start = true;
 
 LRESULT CALLBACK WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK CreateUI(LPVOID);		// User Interface
@@ -283,29 +283,42 @@ DWORD CALLBACK StartServer(LPVOID params) {
 			delete[] mts;
 		}
 		else {
-			// extract message from data
-			SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
-			ChatMessage message;
-			if (message.parseString(data)) {
-				//message.setDt(message.getDt() - 1111111);
-
-				message.setId(mId++);
-				mes_buf.push_back(message);
-				if (mes_buf.size() > MAX_COUNT_MESSAGES) {
-					mes_buf.pop_front();
-				}
-				SerializeMessages();
-				//SendMessage(serverLog, LB_RESETCONTENT, 0, 0);
-				mts = message.toString();
-				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)mts);
-				mts = SerializeMessages();
-				// send answer to client - write in socket
-				send(acceptSocket, mts, strlen(mts) + 1, 0);
-				delete[] mts;
+			// \b at first place - AUTH command
+			if (data[0] == '\b') {
+				data[0] = '+';
+				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+				send(acceptSocket, "201\0", 4, 0);
+			}
+			else if (data[0] == '\a') {
+				data[0] = '-';
+				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+				send(acceptSocket, "200\0", 4, 0);
 			}
 			else {
-				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
-				send(acceptSocket, "500", 4, 0);
+				// extract message from data
+				SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
+				ChatMessage message;
+				if (message.parseString(data)) {
+					//message.setDt(message.getDt() - 1111111);
+					message.setId(mId++);
+					mes_buf.push_back(message);
+					if (mes_buf.size() > MAX_COUNT_MESSAGES) {
+						mes_buf.pop_front();
+					}
+					SerializeMessages();
+					//SendMessage(serverLog, LB_RESETCONTENT, 0, 0);
+					mts = message.toString();
+					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)mts);
+					mts = SerializeMessages();
+					// send answer to client - write in socket
+					send(acceptSocket, mts, strlen(mts) + 1, 0);
+
+					delete[] mts;
+				}
+				else {
+					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+					send(acceptSocket, "500", 4, 0);
+				}
 			}
 
 		}
