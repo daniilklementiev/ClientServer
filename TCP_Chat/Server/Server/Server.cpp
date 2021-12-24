@@ -30,12 +30,12 @@ std::list<ChatMessage> mes_buf;
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
-	
+
 	hInst = hInstance;
 
 	const WCHAR WIN_CLASS_NAME[] = L"ServerWindow";
 	WNDCLASS wc = {};
-	
+
 	wc.lpfnWndProc = WinProc;
 	wc.hInstance = hInst;
 	wc.lpszClassName = WIN_CLASS_NAME;
@@ -112,7 +112,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 DWORD CALLBACK CreateUI(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
-	
+
 	grpEndpoint = CreateWindowExW(0, L"Button", L"EndPoint",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		10, 10, 150, 70, hWnd, 0, hInst, NULL);
@@ -288,7 +288,7 @@ DWORD CALLBACK StartServer(LPVOID params) {
 			ChatMessage message;
 			if (message.parseString(data)) {
 				//message.setDt(message.getDt() - 1111111);
-				
+
 				message.setId(mId++);
 				mes_buf.push_back(message);
 				if (mes_buf.size() > MAX_COUNT_MESSAGES) {

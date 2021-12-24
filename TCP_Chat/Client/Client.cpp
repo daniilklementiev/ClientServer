@@ -188,7 +188,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 DWORD CALLBACK CreateUI(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
-	
+
 	grpEndpoint = CreateWindowExW(0, L"Button", L"EndPoint",
 		BS_GROUPBOX | WS_CHILD | WS_VISIBLE,
 		10, 10, 150, 300, hWnd, 0, hInst, NULL);
@@ -284,7 +284,7 @@ bool DeserializeMessage(char* str) {
 			str[len] = '\0';
 			ChatMessage m;
 			if (m.parseStringDT(start)) {
-				
+
 				msg.push_back(m);
 				SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
 			}
@@ -298,39 +298,39 @@ bool DeserializeMessage(char* str) {
 	return true;
 }
 
- /*bool DeserializeMessage(char* str) {
-	if (str == NULL) {
-		return false;
-	}
-	size_t len = 0, r = 0;
-	char* start = str;
-	msg.clear();
-	SendMessageA(chatLog, LB_RESETCONTENT, 0, 0);
+/*bool DeserializeMessage(char* str) {
+   if (str == NULL) {
+	   return false;
+   }
+   size_t len = 0, r = 0;
+   char* start = str;
+   msg.clear();
+   SendMessageA(chatLog, LB_RESETCONTENT, 0, 0);
 
-	while (str[len] != '\0') {
-		if (str[len] == '\r') {
-			r += 1;
-			str[len] = '\0';
-			ChatMessage m;
-			if (m.parseStringDT(start)) {
-				msg.push_back(m);
-				SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
-			}
-			else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Message parse error");
-			start = str + len + 1;
-		}
-		len += 1;
-	}
-	if (len > r) {
-		ChatMessage m;
-		if (m.parseStringDT(start)) {
-			msg.push_back(m);
-			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
-		}
-		else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Message parse error");
-	}
-	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
-	return true;
+   while (str[len] != '\0') {
+	   if (str[len] == '\r') {
+		   r += 1;
+		   str[len] = '\0';
+		   ChatMessage m;
+		   if (m.parseStringDT(start)) {
+			   msg.push_back(m);
+			   SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
+		   }
+		   else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Message parse error");
+		   start = str + len + 1;
+	   }
+	   len += 1;
+   }
+   if (len > r) {
+	   ChatMessage m;
+	   if (m.parseStringDT(start)) {
+		   msg.push_back(m);
+		   SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)m.toClientString());
+	   }
+	   else SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Message parse error");
+   }
+   SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
+   return true;
 }
 */
 

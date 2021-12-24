@@ -154,7 +154,7 @@ public:
 		if (_str) delete[] _str;
 		int len = text_len + nick_len + 66;
 		_str = new char[len];
-		
+
 		sprintf(_str, "%s\t%s\t%d\t%lld", this->txt, this->nick, dt, id);
 		return _str;
 	}
