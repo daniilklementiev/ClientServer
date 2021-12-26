@@ -28,6 +28,8 @@ char* SerializeMessages();
 
 std::list<ChatMessage> mes_buf;
 
+std::list<char*> usersList;
+
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
 {
 
@@ -284,10 +286,30 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		}
 		else {
 			// \b at first place - AUTH command
+			int authorizedCount = 0;
+			int usersAlreadyExist = 0;
+
 			if (data[0] == '\b') {
-				data[0] = '+';
-				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
-				send(acceptSocket, "201\0", 4, 0);
+				if (usersList.size() == 0) {
+					usersList.push_back(data);
+					send(acceptSocket, "201", 4, 0);
+				}
+				else {
+					for (auto i = usersList.begin(); i != usersList.end(); i++) {
+						if (strlen(*i) == strlen(data)) {
+							for (int j = 0; j < strlen(data); j++) 
+								if ((*i)[j] == data[j]) usersAlreadyExist++;
+							if (usersAlreadyExist == strlen(data)) authorizedCount++;
+							usersAlreadyExist = 0;
+						}
+					}
+					if (authorizedCount == 0) {
+						usersList.push_back(data);
+						send(acceptSocket, "201", 4, 0);
+					}
+					else send(acceptSocket, "401", 4, 0);
+					authorizedCount = 0;
+				}
 			}
 			else if (data[0] == '\a') {
 				data[0] = '-';
