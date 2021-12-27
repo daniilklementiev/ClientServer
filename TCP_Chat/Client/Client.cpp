@@ -253,7 +253,7 @@ bool DeserializeMessage(char* str) {
 	char* start = str;
 	std::list<ChatMessage>* newMsg = new std::list<ChatMessage>;
 	bool isParsing = (str[len] != '\0');
-	msg->clear();
+	//msg->clear();
 	SendMessageA(chatLog, LB_RESETCONTENT, 0, 0);
 	while (isParsing) {
 		if (str[len] == '\r' || str[len] == '\0') {
