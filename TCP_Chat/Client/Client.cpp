@@ -27,6 +27,7 @@ HWND grpEndpoint, grpLog, chatLog;
 HWND btnSend, btnName, btnReset, btnAuth, btnDscn, btnClear;
 HWND editIP, editPort, editName, editMessage;
 HANDLE sendLock = NULL;
+HANDLE listMutex = NULL;
 
 
 char chatMsg[MSG_LEN];
@@ -38,6 +39,8 @@ std::list<ChatMessage*> msg;
 char name[128];
 bool isConnected = false;
 bool sended = false;
+bool deleted = false;
+
 LRESULT CALLBACK	WinProc(HWND, UINT, WPARAM, LPARAM);
 DWORD	CALLBACK	CreateUI(LPVOID);			// User interface
 DWORD	CALLBACK	SyncChatMessage(LPVOID);	//
@@ -112,8 +115,8 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		if (ntf == LBN_DBLCLK) {
 			int answer = MessageBoxW(hWnd, L"Delete Message", L"Do you want to delete this message?", MB_YESNO);
 			if (answer == IDYES) {
-				int select = (int)SendMessageW(chatLog, LB_GETCURSEL, 0, NULL);
-				CreateThread(NULL, 0, DeleteMessage, (LPVOID)select, 0, NULL);
+				int selected = (int)SendMessageW(chatLog, LB_GETCURSEL, 0, NULL);
+				CreateThread(NULL, 0, DeleteMessage, (LPVOID)selected, 0, NULL);
 			}
 		}
 
@@ -234,6 +237,7 @@ DWORD CALLBACK CreateUI(LPVOID params) {
 DWORD CALLBACK SendChatMessage(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
 	WaitForSingleObject(sendLock, INFINITE);
+	WaitForSingleObject(listMutex, INFINITE);
 	int nikLen = SendMessageA(editName, WM_GETTEXT,
 		NIK_LEN - 1, (LPARAM)chatNick);
 	chatNick[nikLen] = '\0';
@@ -251,19 +255,32 @@ DWORD CALLBACK SendChatMessage(LPVOID params) {
 		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Send error");
 	}
 	ReleaseMutex(sendLock);
+	ReleaseMutex(listMutex);
 	return 0;
 }
 
 DWORD	CALLBACK SyncChatMessage(LPVOID params) {
 	HWND hWnd = *((HWND*)params);
 	WaitForSingleObject(sendLock, INFINITE);
+	WaitForSingleObject(listMutex, INFINITE);
 	chatMsg[0] = '\0';
-	if (SendToServer(chatMsg) > 0)
+	if (deleted == true) {
+		std::list<ChatMessage*>::iterator it = msg.begin();
+		SendMessageA(chatLog, LB_RESETCONTENT, 0, 0);
+		for (auto it : msg) {
+			SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)it->toClientString());
+		}
+		deleted = false;
+	}
+
+	if (SendToServer(chatMsg) > 0){
 		DeserializeMessage(chatMsg);
+	}
 	else {
 		SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)"Sync error");
 	}
 	ReleaseMutex(sendLock);
+	ReleaseMutex(listMutex);
 	return 0;
 
 
@@ -271,18 +288,14 @@ DWORD	CALLBACK SyncChatMessage(LPVOID params) {
 
 bool DeserializeMessage(char* str) {
 	WaitForSingleObject(sendLock, INFINITE);
+	WaitForSingleObject(listMutex, INFINITE);
 	if (str == NULL) return false;
 	size_t len = 0;
 	char* start = str;
 	bool isParsing = true;
 	bool sameID;
+	
 	while (isParsing) {
-		if (str[len] == '\v') {
-			SendMessageW(chatLog, LB_RESETCONTENT, 0, 0);
-			for (ChatMessage* it : msg) {
-				SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)(it->toClientString()));
-			}
-		}
 		if (str[len] == '\r' || str[len] == '\0') {
 			if (str[len] == '\0') {
 				isParsing = false;
@@ -323,6 +336,7 @@ bool DeserializeMessage(char* str) {
 	}
 	SendMessageW(chatLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
 	ReleaseMutex(sendLock);
+	ReleaseMutex(listMutex);
 	return true;
 }
 
@@ -337,6 +351,7 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 	int err;
 	// look mutex
 	WaitForSingleObject(sendLock, INFINITE);
+	WaitForSingleObject(listMutex, INFINITE);
 	err = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (err != 0) {
 		_snwprintf_s(str, MAX_LEN, L"Startup failed, error %d", err);
@@ -404,11 +419,13 @@ DWORD CALLBACK SendToServer(LPVOID params) {
 	WSACleanup();
 	// Unlock mutex
 	ReleaseMutex(sendLock);
+	ReleaseMutex(listMutex);
 	return receivedCnt;
 }
 
 DWORD CALLBACK JoinServerClick(LPVOID params) {
 	WaitForSingleObject(sendLock, INFINITE);
+	WaitForSingleObject(listMutex, INFINITE);
 	HWND hWnd = *((HWND*)params);
 	chatNick[0] = '\b';
 	int nickLen = SendMessageA(editName, WM_GETTEXT, NIK_LEN - 1, (LPARAM)(chatNick + 1));
@@ -437,11 +454,13 @@ DWORD CALLBACK JoinServerClick(LPVOID params) {
 		}
 	}
 	ReleaseMutex(sendLock);
+	ReleaseMutex(listMutex);
 	return 0;
 }
 
 DWORD CALLBACK LeaveFromServer(LPVOID params) {
 	WaitForSingleObject(sendLock, INFINITE);
+	WaitForSingleObject(listMutex, INFINITE);
 	isConnected = false;
 	HWND hWnd = *((HWND*)params);
 	chatNick[0] = '\a';
@@ -468,10 +487,12 @@ DWORD CALLBACK LeaveFromServer(LPVOID params) {
 		}
 	}
 	ReleaseMutex(sendLock);
+	ReleaseMutex(listMutex);
 	return 0;
 }
 
 DWORD CALLBACK DeleteMessage(LPVOID params) {
+	WaitForSingleObject(listMutex, INFINITE);
 	if (msg.size() == 0) {
 		MessageBoxA(NULL, "Noting to delete", "Error deleting", 0);
 	}
@@ -481,20 +502,20 @@ DWORD CALLBACK DeleteMessage(LPVOID params) {
 		str[len] = '\0';
 		char ID[16];
 		ID[0] = '\0';
-		ChatMessage* m;
 		std::list<ChatMessage*>::iterator it = msg.begin();
-		for (; it != msg.end(); it++) {
-			
-			if (strcmp((*it)->toClientString(), str) == 0) {
-				snprintf(ID, 16, "\v%lld", (*it)->getId());
+		for (auto it : msg) {
+			if (strcmp((it)->toClientString(), str) == 0) {
+				msg.remove(it);
+				snprintf(ID, 16, "\v%lld", (it)->getId());
 				SendMessageW(chatLog, LB_DELETESTRING, (WPARAM)params, 0);
 				//MessageBoxA(0, (LPCSTR)(*it)->toClientString(), "", 0);
-				msg.remove(*it);
 				break;
 			}
 		}
 		SendToServer(ID);
+		deleted = true;
 	}
+	ReleaseMutex(listMutex);
 	return 0;
 }
 

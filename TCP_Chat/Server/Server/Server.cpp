@@ -354,6 +354,10 @@ DWORD CALLBACK StartServer(LPVOID params) {
 						break;
 					}
 				}
+				SendMessageA(serverLog, LB_RESETCONTENT, 0, 0);
+				for (auto it : mes_buf) {
+					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)(it->toString()));
+				}
 				delete[] identificator;
 			}
 			else {
