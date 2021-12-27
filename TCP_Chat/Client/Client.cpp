@@ -48,6 +48,7 @@ DWORD	CALLBACK	JoinServerClick(LPVOID);
 DWORD   CALLBACK	LeaveFromServer(LPVOID);
 DWORD   CALLBACK	DeleteMessage(LPVOID);
 DWORD	CALLBACK	ClearChat(LPVOID);
+DWORD	CALLBACK	UpdateChat(LPVOID);
 bool				DeserializeMessage(char*);
 
 
@@ -109,7 +110,11 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		int ntf = HIWORD(wParam);
 
 		if (ntf == LBN_DBLCLK) {
-			CreateThread(NULL, 0, DeleteMessage, &hWnd, 0, NULL);
+			int answer = MessageBoxW(hWnd, L"Delete Message", L"Do you want to delete this message?", MB_YESNO);
+			if (answer == IDYES) {
+				int select = (int)SendMessageW(chatLog, LB_GETCURSEL, 0, NULL);
+				CreateThread(NULL, 0, DeleteMessage, (LPVOID)select, 0, NULL);
+			}
 		}
 
 		switch (cmd) {
@@ -272,6 +277,12 @@ bool DeserializeMessage(char* str) {
 	bool isParsing = true;
 	bool sameID;
 	while (isParsing) {
+		if (str[len] == '\v') {
+			SendMessageW(chatLog, LB_RESETCONTENT, 0, 0);
+			for (ChatMessage* it : msg) {
+				SendMessageA(chatLog, LB_ADDSTRING, 0, (LPARAM)(it->toClientString()));
+			}
+		}
 		if (str[len] == '\r' || str[len] == '\0') {
 			if (str[len] == '\0') {
 				isParsing = false;
@@ -461,28 +472,28 @@ DWORD CALLBACK LeaveFromServer(LPVOID params) {
 }
 
 DWORD CALLBACK DeleteMessage(LPVOID params) {
-	HWND hWnd = *((HWND*)params);
 	if (msg.size() == 0) {
-		MessageBoxA(NULL, (LPCSTR)"Noting to delete", "-----", 0);
+		MessageBoxA(NULL, "Noting to delete", "Error deleting", 0);
 	}
 	else {
-		ChatMessage* mes = new ChatMessage();
-		int selected;
-		selected = SendMessageW(chatLog, LB_GETCURSEL, 0, 0L);
-		char buff[2048] = {  };
-		char buffs[2048] = { };
-		SendMessageA(chatLog, LB_GETTEXT, selected, (LPARAM)buff);
-		for (ChatMessage* it : msg) {
-			if (strcmp(it->toClientString(), buff) == 0) {
-				SendMessageW(chatLog, LB_DELETESTRING, (WPARAM)selected, 0);
-				msg.remove(it);
-				KillTimer(hWnd, SYNC_TIMER_MESSAGE);
-				MessageBoxA(NULL, (LPCSTR)it->toClientString(), "-----", 0);
-				MessageBoxA(NULL, (LPCSTR)"Successful deleted", "-----", 0);
-				SetTimer(hWnd, SYNC_TIMER_MESSAGE, 1000, NULL);
+		char str[MSG_LEN];
+		int len = SendMessageA(chatLog, LB_GETTEXT, (WPARAM)params, (LPARAM)str);
+		str[len] = '\0';
+		char ID[16];
+		ID[0] = '\0';
+		ChatMessage* m;
+		std::list<ChatMessage*>::iterator it = msg.begin();
+		for (; it != msg.end(); it++) {
+			
+			if (strcmp((*it)->toClientString(), str) == 0) {
+				snprintf(ID, 16, "\v%lld", (*it)->getId());
+				SendMessageW(chatLog, LB_DELETESTRING, (WPARAM)params, 0);
+				//MessageBoxA(0, (LPCSTR)(*it)->toClientString(), "", 0);
+				msg.remove(*it);
 				break;
 			}
 		}
+		SendToServer(ID);
 	}
 	return 0;
 }

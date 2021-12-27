@@ -26,8 +26,7 @@ DWORD	CALLBACK StopServer(LPVOID);
 char* SerializeMessages();
 
 
-std::list<ChatMessage> mes_buf;
-
+std::list<ChatMessage*> mes_buf;
 std::list<char*> usersList;
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ PWSTR cmdLine, _In_ int showMode)
@@ -286,63 +285,114 @@ DWORD CALLBACK StartServer(LPVOID params) {
 		}
 		else {
 			// \b at first place - AUTH command
-			int authorizedCount = 0;
-			int usersAlreadyExist = 0;
-			int authorization = 0;
-			int userExists = 0;
 			if (data[0] == '\b') {
-				for (auto i = usersList.begin(); i != usersList.end(); i++) {
-					if (strlen(*i) == strlen(data)) {
-						for (int j = 0; j < strlen(data); j++) {
-							if ((*i)[j] == data[j]) {
-								userExists++;
-							}
-						}
-						if (userExists == strlen(data)) {
-							authorization++;
-						}
-						userExists = 0;
-					}
+				data[0] = '+';
+				char* username = new char[16];
+				int len = strlen(data);
+				bool isUsernameFree = true;
+				for (size_t i = 1; i < len; i++)
+				{
+					username[i - 1] = data[i];
 				}
-				if (authorization == 0) {
-					char* dataCopy = new char[strlen(data) + 1];
-					for (int i = 0; i < strlen(data); i++) {
-						dataCopy[i] = data[i];
-						dataCopy[i + 1] = '\0';
-					}
-					data[0] = ' ';
-					strcat(data, " join the server");
+				username[len - 1] = '\0';
+
+				if (usersList.size() == 0) {
+					usersList.push_back(username);
 					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
-					usersList.push_back(dataCopy);
 					send(acceptSocket, "201", 4, 0);
 				}
+				else {
+					for (auto it : usersList) {
+						if (strcmp(username, it) == 0) {
+							isUsernameFree = false;
+						}
+					}
+					if (isUsernameFree) {
+						SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
+						send(acceptSocket, "201", 4, 0);
+						usersList.push_back(username);
+					}
+					else {
+						SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)"Trying to use an existing username");
+						send(acceptSocket, "401", 4, 0);
+					}
+				}
 			}
+			// \a at first place AUTH command (remove username)
 			else if (data[0] == '\a') {
-				data[0] = ' ';
-				strcat(data, " left the server");
+				data[0] = '-';
+				char* username = new char[16];
+				int len = strlen(data);
+				for (size_t i = 1; i < len; i++)
+				{
+					username[i - 1] = data[i];
+				}
+				username[len - 1] = '\0';
+				std::list<char*>::iterator it = usersList.begin();
+				for (; it != usersList.end(); it++) {
+					if (strcmp(username, *it) == 0) {
+						break;
+					}
+				}
+				usersList.erase(it);
 				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
-				send(acceptSocket, "200\0", 4, 0);
+				send(acceptSocket, "200", 4, 0);
+				delete[] username;
+
+			}
+			else if (data[0] == '\v') {
+				char* identificator = new char[16];
+				int length = strlen(data);
+				for (size_t i = 1; i < length; i++)
+				{
+					identificator[i - 1] = data[i];
+				}
+				identificator[length - 1] = '\0';
+				for (std::list<ChatMessage*>::iterator iterator = mes_buf.begin(); iterator != mes_buf.end(); iterator++) {
+					if (atoll(identificator) == (*iterator)->getId()) {
+						mes_buf.remove(*iterator);
+						break;
+					}
+				}
+				delete[] identificator;
 			}
 			else {
 				// extract message from data
-				SendMessageW(serverLog, WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), NULL);
-				ChatMessage message;
-				if (message.parseString(data)) {
-					message.setId(mId++);
-					mes_buf.push_back(message);
-					if (mes_buf.size() > MAX_COUNT_MESSAGES) {
-						mes_buf.pop_front();
+				ChatMessage* message = new ChatMessage();
+				if (message->parseString(data)) {
+					bool isUsernameExist = false;
+					std::list<char*>::iterator it = usersList.begin();
+					for (; it != usersList.end(); it++) {
+						if (strcmp(message->getNick(), *it) == 0) {
+							isUsernameExist = true;
+							break;
+						}
 					}
-					SerializeMessages();
-					mts = message.toString();
-					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)mts);
-					mts = SerializeMessages();
-					// send answer to client - write in socket
-					send(acceptSocket, mts, strlen(mts) + 1, 0);
+					if (isUsernameExist) {
+						message->setId(mId++);
+						mes_buf.push_back(message);
+						if (mes_buf.size() > MAX_COUNT_MESSAGES) {
+							delete mes_buf.front();
+							mes_buf.pop_front();
+						}
+						SerializeMessages();
+						mts = message->toString();
+						SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)mts);
 
-					delete[] mts;
+						mts = SerializeMessages();
+						// send answer to client - write in socket
+						send(acceptSocket, mts, strlen(mts) + 1, 0);
+						//delete[] mts;
+					}
+					else {
+						char buf[150];
+						snprintf(buf, 150, "%s doesn't registered", message->getNick());
+						SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)buf);
+						send(acceptSocket, "401", 4, 0);
+					}
 				}
 				else {
+					delete message;
 					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
 					send(acceptSocket, "500", 4, 0);
 				}
@@ -389,7 +439,7 @@ char* SerializeMessages() {
 	char** strs = new char* [n];
 	size_t total = 0, i = 0;
 
-	for (auto it = mes_buf.begin(); it != mes_buf.end(); it++) {
+	for (auto it : mes_buf) {
 		strs[i] = it->toString();
 		total += strlen(strs[i]) + 1;
 		++i;
