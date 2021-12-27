@@ -285,36 +285,60 @@ DWORD CALLBACK StartServer(LPVOID params) {
 			delete[] mts;
 		}
 		else {
-			// \b at first place - AUTH command
-			int authorizedCount = 0;
-			int usersAlreadyExist = 0;
-
 			if (data[0] == '\b') {
+				data[0] = '+';
+				char* username = new char[16];
+				int len = strlen(data);
+				bool isUsernameFree = true;
+				for (size_t i = 1; i < len; i++)
+				{
+					username[i - 1] = data[i];
+				}
+				username[len - 1] = '\0';
+
 				if (usersList.size() == 0) {
-					usersList.push_back(data);
+					usersList.push_back(username);
+					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
 					send(acceptSocket, "201", 4, 0);
 				}
 				else {
-					for (auto i = usersList.begin(); i != usersList.end(); i++) {
-						if (strlen(*i) == strlen(data)) {
-							for (int j = 0; j < strlen(data); j++) 
-								if ((*i)[j] == data[j]) usersAlreadyExist++;
-							if (usersAlreadyExist == strlen(data)) authorizedCount++;
-							usersAlreadyExist = 0;
+					for (auto it : usersList) {
+						if (strcmp(username, it) == 0) {
+							isUsernameFree = false;
 						}
 					}
-					if (authorizedCount == 0) {
-						usersList.push_back(data);
+					if (isUsernameFree) {
+						SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
 						send(acceptSocket, "201", 4, 0);
+						usersList.push_back(username);
 					}
-					else send(acceptSocket, "401", 4, 0);
-					authorizedCount = 0;
+					else {
+						SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)"Trying to use an existing username");
+						send(acceptSocket, "401", 4, 0);
+					}
 				}
 			}
+			// \a at first place AUTH command (remove username)
 			else if (data[0] == '\a') {
 				data[0] = '-';
+				char* username = new char[16];
+				int len = strlen(data);
+				for (size_t i = 1; i < len; i++)
+				{
+					username[i - 1] = data[i];
+				}
+				username[len - 1] = '\0';
+				std::list<char*>::iterator it = usersList.begin();
+				for (; it != usersList.end(); it++) {
+					if (strcmp(username, *it) == 0) {
+						break;
+					}
+				}
+				usersList.erase(it);
 				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
-				send(acceptSocket, "200\0", 4, 0);
+				send(acceptSocket, "200", 4, 0);
+				delete[] username;
+
 			}
 			else {
 				// extract message from data
