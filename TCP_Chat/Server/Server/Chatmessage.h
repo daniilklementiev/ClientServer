@@ -77,7 +77,7 @@ public:
 		// from 0 to TAB - text
 		if (this->txt != NULL) delete[] this->txt;
 
-		this->txt = new char[tabPos + 1];
+		this->txt = new char[tabPos + 2];
 		for (i = 0; i < tabPos; ++i)
 			this->txt[i] = str[i];
 
@@ -90,7 +90,7 @@ public:
 		if (tabPos == len) return false;
 		if (this->nick != NULL) delete[] this->nick;
 
-		this->nick = new char[tabPos - i + 1];
+		this->nick = new char[tabPos - i + 2];
 
 		for (int j = i + 1; j < tabPos; ++j)
 			this->nick[j - i - 1] = str[j];
@@ -133,13 +133,13 @@ public:
 
 		// from 0 to TAB - text
 		if (this->txt != NULL) delete[] this->txt;
-		this->txt = new char[tabPosition + 1];
+		this->txt = new char[tabPosition + 2];
 		for (i = 0; i < tabPosition; ++i) this->txt[i] = str[i];
 		this->txt[tabPosition] = '\0';
 
 		// from TAB to TAB
 		if (this->nick != NULL) delete[] this->nick;
-		this->nick = new char[tabPosition - i + 1];
+		this->nick = new char[len - i + 2];
 		for (int j = i + 1; j < len; ++j)
 			this->nick[j - i - 1] = str[j];
 		this->nick[len - i - 1] = '\0';

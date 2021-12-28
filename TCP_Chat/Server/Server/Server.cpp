@@ -289,7 +289,7 @@ DWORD CALLBACK StartServer(LPVOID params) {
 				data[0] = '+';
 				char* username = new char[16];
 				int len = strlen(data);
-				bool isUsernameFree = true;
+				bool usernameFree = true;
 				for (size_t i = 1; i < len; i++)
 				{
 					username[i - 1] = data[i];
@@ -304,10 +304,10 @@ DWORD CALLBACK StartServer(LPVOID params) {
 				else {
 					for (auto it : usersList) {
 						if (strcmp(username, it) == 0) {
-							isUsernameFree = false;
+							usernameFree = false;
 						}
 					}
-					if (isUsernameFree) {
+					if (usernameFree) {
 						SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
 						send(acceptSocket, "201", 4, 0);
 						usersList.push_back(username);
@@ -338,7 +338,6 @@ DWORD CALLBACK StartServer(LPVOID params) {
 				SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)data);
 				send(acceptSocket, "200", 4, 0);
 				delete[] username;
-
 			}
 			else if (data[0] == '\f') {
 				char* id = new char[16];
@@ -354,10 +353,6 @@ DWORD CALLBACK StartServer(LPVOID params) {
 						mes_buf.erase(it);
 						break;
 					}
-				}
-				SendMessageA(serverLog, LB_RESETCONTENT, 0, 0);
-				for (auto it : mes_buf) {
-					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)(it->toString()));
 				}
 				delete[] id;
 			}
