@@ -323,7 +323,7 @@ bool DeserializeMessage(char* str) {
 
 		len += 1;
 	}
-	if (IDs.size() != IDs.size()) {
+	if (IDs.size() != msg.size()) {
 		std::list<ChatMessage*>::iterator itAllMsg = msg.begin();
 		auto it = IDs.begin();
 		for (; itAllMsg != msg.end(); itAllMsg++) {
@@ -494,25 +494,19 @@ DWORD CALLBACK LeaveFromServer(LPVOID params) {
 }
 
 DWORD CALLBACK DeleteMessage(LPVOID params) {
-	if (msg.size() == 0) {
-		MessageBoxA(NULL, "Noting to delete", "Error deleting", 0);
-	}
-	else {
-		char str[MSG_LEN];
-		int len = SendMessageA(chatLog, LB_GETTEXT, (WPARAM)params, (LPARAM)str);
-		str[len] = '\0';
-		char messageID[16];
-		messageID[0] = '\f';
-		for (std::list<ChatMessage*>::iterator it = msg.begin(); it != msg.end(); it++) {
-			if (strcmp(((*it)->toClientString()), str)) {
-				snprintf(messageID + 1, 16, "%lld", ((*it)->getId()));
-				msg.erase(it);
-				SendMessageW(chatLog, LB_DELETESTRING, (WPARAM)params, 0);
-				break;
-			}
+	char str[MSG_LEN];
+	int len = SendMessageA(chatLog, LB_GETTEXT, (WPARAM)params, (LPARAM)str);
+	SendMessageA(chatLog, LB_DELETESTRING, (WPARAM)params, NULL);
+	str[len] = '\0';
+	char messageID[16];
+	messageID[0] = '\f';
+	for (auto it : msg) {
+		if (strcmp(it->toClientString(), str) == 0) {
+			snprintf(messageID + 1, 16, "%lld", it->getId());
+			break;
 		}
-		SendToServer(messageID);
 	}
+	SendToServer(messageID);
 	return 0;
 }
 
