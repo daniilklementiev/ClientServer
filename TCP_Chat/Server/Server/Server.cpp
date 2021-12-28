@@ -340,17 +340,18 @@ DWORD CALLBACK StartServer(LPVOID params) {
 				delete[] username;
 
 			}
-			else if (data[0] == '\v') {
-				char* identificator = new char[16];
-				int length = strlen(data);
-				for (size_t i = 1; i < length; i++)
+			else if (data[0] == '\f') {
+				char* id = new char[16];
+				int len = strlen(data);
+				for (size_t i = 1; i < len; i++)
 				{
-					identificator[i - 1] = data[i];
+					id[i - 1] = data[i];
 				}
-				identificator[length - 1] = '\0';
-				for (std::list<ChatMessage*>::iterator iterator = mes_buf.begin(); iterator != mes_buf.end(); iterator++) {
-					if (atoll(identificator) == (*iterator)->getId()) {
-						mes_buf.remove(*iterator);
+				id[len - 1] = '\0';
+				std::list<ChatMessage*>::iterator it = mes_buf.begin();
+				for (; it != mes_buf.end(); it++) {
+					if (atoll(id) == (*it)->getId()) {
+						mes_buf.erase(it);
 						break;
 					}
 				}
@@ -358,7 +359,7 @@ DWORD CALLBACK StartServer(LPVOID params) {
 				for (auto it : mes_buf) {
 					SendMessageA(serverLog, LB_ADDSTRING, 0, (LPARAM)(it->toString()));
 				}
-				delete[] identificator;
+				delete[] id;
 			}
 			else {
 				// extract message from data

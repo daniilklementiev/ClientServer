@@ -500,19 +500,18 @@ DWORD CALLBACK DeleteMessage(LPVOID params) {
 		char str[MSG_LEN];
 		int len = SendMessageA(chatLog, LB_GETTEXT, (WPARAM)params, (LPARAM)str);
 		str[len] = '\0';
-		char ID[16];
-		ID[0] = '\0';
+		char messageID[16];
+		messageID[0] = '\f';
 		std::list<ChatMessage*>::iterator it = msg.begin();
 		for (auto it : msg) {
 			if (strcmp((it)->toClientString(), str) == 0) {
 				msg.remove(it);
-				snprintf(ID, 16, "\v%lld", (it)->getId());
+				snprintf(messageID + 1, 16, "%lld", it->getId());
 				SendMessageW(chatLog, LB_DELETESTRING, (WPARAM)params, 0);
-				//MessageBoxA(0, (LPCSTR)(*it)->toClientString(), "", 0);
 				break;
 			}
 		}
-		SendToServer(ID);
+		SendToServer(messageID);
 		deleted = true;
 	}
 	ReleaseMutex(listMutex);
